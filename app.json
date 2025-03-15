@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "BedMade",
+    "slug": "bedmade-expo-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "BedMade needs access to your camera to take photos of your bed for verification.",
+        "NSPhotoLibraryUsageDescription": "BedMade needs access to your photo library to select photos of your bed for verification."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BedMade needs access to your camera to take photos of your bed for verification."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BedMade needs access to your photo library to select photos of your bed for verification."
+        }
+      ]
+    ]
+  }
+} 
