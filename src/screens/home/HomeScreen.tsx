@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Animated } from 'react-native';
 import { Text, Button, Surface, Badge, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -7,6 +7,7 @@ import { supabase } from '../../api/supabase';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getTodayLocalDateString } from '../../utils/dateUtils';
 import { getUserProfile } from '../../api/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -80,6 +81,81 @@ const HomeScreen = () => {
   const [isEarlyCompletion, setIsEarlyCompletion] = React.useState(false);
   // Add state for avatar URL
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+
+  // Add animation values with proper staggered timing
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(20)).current;
+  
+  // Additional animated values for staggered animations
+  const fadeAnimStatus = React.useRef(new Animated.Value(0)).current;
+  const slideAnimStatus = React.useRef(new Animated.Value(20)).current;
+  
+  const fadeAnimStreaks = React.useRef(new Animated.Value(0)).current;
+  const slideAnimStreaks = React.useRef(new Animated.Value(20)).current;
+  
+  const fadeAnimQuote = React.useRef(new Animated.Value(0)).current;
+  const slideAnimQuote = React.useRef(new Animated.Value(20)).current;
+  
+  React.useEffect(() => {
+    // Run entrance animation when component mounts with staggered timing
+    Animated.stagger(100, [
+      // First greeting section
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        })
+      ]),
+      
+      // Status card with 100ms delay
+      Animated.parallel([
+        Animated.timing(fadeAnimStatus, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnimStatus, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        })
+      ]),
+      
+      // Streaks section with 200ms delay
+      Animated.parallel([
+        Animated.timing(fadeAnimStreaks, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnimStreaks, {
+          toValue: 0, 
+          duration: 800,
+          useNativeDriver: true,
+        })
+      ]),
+      
+      // Quote section with 300ms delay
+      Animated.parallel([
+        Animated.timing(fadeAnimQuote, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnimQuote, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        })
+      ])
+    ]).start();
+  }, []);
 
   // Force refresh function for testing
   const forceRefresh = () => {
@@ -658,11 +734,35 @@ const HomeScreen = () => {
     }
   };
 
+  // Helper to get a friendly goal time string
+  const getGoalTimeString = (goalType: string | null): string => {
+    if (!goalType) return '8:00 AM';
+    
+    switch (goalType) {
+      case 'early':
+        return '8:00 AM';
+      case 'mid':
+        return '10:00 AM';
+      case 'late':
+        return '12:00 PM';
+      default:
+        return '8:00 AM';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.content}>
-        {/* Greeting Section */}
-        <View style={styles.section}>
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Greeting Section with Animation */}
+        <Animated.View 
+          style={[
+            styles.section, 
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
           <View style={styles.greetingContainer}>
             <View style={styles.greetingTextContainer}>
               <Text style={styles.greeting}>{getGreeting()}</Text>
@@ -689,199 +789,314 @@ const HomeScreen = () => {
           </View>
           {/* Debug text to show if user is considered new */}
           {__DEV__ && (
-            <View>
-              <Text style={{ color: 'gray', fontSize: 12 }}>
+            <View style={styles.debugContainer}>
+              <Text style={styles.debugText}>
                 Debug: isNewUser={isNewUser ? 'true' : 'false'}, totalBedsMade={totalBedsMade}, hasVerifiedBed={hasVerifiedBed ? 'true' : 'false'}
               </Text>
-              <View style={{ flexDirection: 'row', marginTop: 5 }}>
-                <TouchableOpacity onPress={forceRefresh} style={{ marginRight: 10 }}>
-                  <Text style={{ color: 'blue', fontSize: 12 }}>Force Refresh</Text>
+              <View style={styles.debugButtonsContainer}>
+                <TouchableOpacity onPress={forceRefresh} style={styles.debugButton}>
+                  <Text style={styles.debugButtonText}>Force Refresh</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={debugGoalValues}>
-                  <Text style={{ color: 'green', fontSize: 12 }}>Debug Goals</Text>
+                <TouchableOpacity onPress={debugGoalValues} style={styles.debugButton}>
+                  <Text style={styles.debugButtonText}>Debug Goals</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-        </View>
+        </Animated.View>
 
-        {/* Status Card */}
-        <View style={styles.section}>
+        {/* Today's Status Card */}
+        <Animated.View 
+          style={[
+            styles.section, 
+            { 
+              opacity: fadeAnimStatus, 
+              transform: [{ translateY: slideAnimStatus }]
+            }
+          ]}
+        >
           <Text style={styles.sectionTitle}>Today's Status</Text>
-          <Surface style={styles.modernStatusCard}>
+          <Surface style={styles.statusCard}>
             {hasVerifiedBed ? (
-              <View style={styles.verifiedStatusContainer}>
-                <View style={styles.modernStatusIconContainer}>
-                  <MaterialIcons name="check-circle" size={48} color="#34C759" />
-                </View>
-                <View style={styles.statusTextContainer}>
-                  <View style={styles.statusHeaderContainer}>
-                    <Text style={styles.modernStatusTitle}>Bed Made</Text>
-                    {isEarlyCompletion && (
-                      <View style={[styles.goalStatusBadge, styles.earlyCompletionBadge]}>
-                        <MaterialIcons name="star" size={14} color="#FFD700" />
-                        <Text style={[styles.goalStatusText, styles.earlyCompletionText]}>
-                          Superstar!
-                        </Text>
-                      </View>
-                    )}
-                    {isWithinGoal && !isEarlyCompletion && (
-                      <View style={[styles.goalStatusBadge, styles.withinGoalBadge]}>
-                        <MaterialIcons name="check" size={14} color="white" />
-                        <Text style={[styles.goalStatusText, styles.withinGoalText]}>
-                          Goal Achieved
-                        </Text>
-                      </View>
-                    )}
-                    {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
-                      <View style={[styles.goalStatusBadge, styles.missedGoalBadge]}>
-                        <MaterialIcons name="warning" size={14} color="#FF3B30" />
-                        <Text style={[styles.goalStatusText, styles.missedGoalText]}>
-                          Goal Missed
-                        </Text>
-                      </View>
-                    )}
+              <View style={styles.statusContainer}>
+                <View style={styles.statusHeader}>
+                  <View style={styles.iosIconWrapper}>
+                    <LinearGradient
+                      colors={['#32D74B', '#28BD3E']}
+                      style={styles.iosIconBackground}
+                    >
+                      <MaterialIcons name="check" size={28} color="white" />
+                    </LinearGradient>
                   </View>
-                  <Text style={styles.modernStatusMessage}>
+                  <View style={styles.statusTitleContainer}>
+                    <Text style={styles.statusTitle}>Bed Made</Text>
+                    <View style={styles.badgeContainer}>
+                      {isEarlyCompletion && (
+                        <View style={[styles.statusBadge, styles.earlyBadge]}>
+                          <MaterialIcons name="star" size={10} color="white" />
+                          <Text style={styles.badgeText}>Superstar!</Text>
+                        </View>
+                      )}
+                      {isWithinGoal && !isEarlyCompletion && (
+                        <View style={[styles.statusBadge, styles.goalBadge]}>
+                          <MaterialIcons name="check" size={10} color="white" />
+                          <Text style={styles.badgeText}>Goal Achieved</Text>
+                        </View>
+                      )}
+                      {verificationTime && (
+                        <View style={[
+                          styles.verifiedAtContainer,
+                          isEarlyCompletion && styles.earlyVerifiedContainer,
+                          isWithinGoal && !isEarlyCompletion && styles.onTimeVerifiedContainer,
+                          !isWithinGoal && !isEarlyCompletion && styles.lateVerifiedContainer
+                        ]}>
+                          <MaterialIcons 
+                            name="schedule" 
+                            size={11} 
+                            color={isEarlyCompletion ? "#5856D6" : isWithinGoal ? "#34C759" : "#6E6E73"} 
+                          />
+                          <Text style={[
+                            styles.verifiedAtText,
+                            isEarlyCompletion && styles.earlyVerifiedText,
+                            isWithinGoal && !isEarlyCompletion && styles.onTimeVerifiedText,
+                            !isWithinGoal && !isEarlyCompletion && styles.lateVerifiedText
+                          ]}>
+                            {verificationTime}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  
+                  {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
+                    <View style={styles.missedGoalBadge}>
+                      <MaterialIcons name="warning" size={14} color="#FF3B30" />
+                      <Text style={styles.missedGoalBadgeText}>Goal Missed</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.statusContent}>
+                  <Text style={styles.statusMessage}>
                     {isEarlyCompletion 
                       ? "Outstanding! You beat your goal time and started your day with a win!"
                       : isWithinGoal 
                         ? `Great job hitting your ${DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange || 'morning'} goal!`
                         : "Better late than never! Your bed is made and that's what matters most."}
                   </Text>
-                  <View style={styles.badgeContainer}>
-                    {verificationTime && (
-                      <View style={[
-                        styles.modernTimeBadge,
-                        isEarlyCompletion && styles.earlyTimeBadge,
-                        isWithinGoal && !isEarlyCompletion && styles.withinGoalTimeBadge,
-                        !isWithinGoal && !isEarlyCompletion && styles.missedTimeBadge
-                      ]}>
+                </View>
+                
+                {/* Morning Goal Tip Section - Only show when bed is made but goal is missed */}
+                {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
+                  <Surface style={styles.morningTipCard}>
+                    <View style={styles.morningTipContent}>
+                      <View style={styles.checkboxContainer}>
+                        <MaterialIcons name="lightbulb" size={28} color="#FF3B30" />
+                      </View>
+                      <View style={styles.tipContentContainer}>
+                        <View style={styles.morningTipBadge}>
+                          <Text style={styles.morningTipBadgeText}>Morning Goal Tip</Text>
+                        </View>
+                        <Text style={styles.morningTipText}>
+                          Try making your bed earlier tomorrow to maintain a consistent routine.
+                        </Text>
+                      </View>
+                    </View>
+                  </Surface>
+                )}
+              </View>
+            ) : (
+              <View style={styles.statusContainer}>
+                <View style={styles.statusHeader}>
+                  {!dailyGoal || !isPastGoalTime(dailyGoal) ? (
+                    <View style={styles.iosIconWrapper}>
+                      <LinearGradient
+                        colors={['#007AFF', '#0055D6']}
+                        style={styles.iosIconBackground}
+                      >
+                        <MaterialIcons name="hotel" size={24} color="white" />
+                      </LinearGradient>
+                    </View>
+                  ) : (
+                    <View style={styles.iosIconWrapper}>
+                      <LinearGradient
+                        colors={['#FF9500', '#F08300']}
+                        style={styles.iosIconBackground}
+                      >
+                        <MaterialIcons name="access-time" size={24} color="white" />
+                      </LinearGradient>
+                    </View>
+                  )}
+                  
+                  <View style={styles.statusTitleContainer}>
+                    <Text style={styles.statusTitle}>
+                      {!dailyGoal || !isPastGoalTime(dailyGoal) 
+                        ? "Ready for Today?" 
+                        : "Time Check"}
+                    </Text>
+                    
+                    {dailyGoal && !isPastGoalTime(dailyGoal) && (
+                      <View style={styles.goalInfoBadge}>
                         <MaterialIcons 
-                          name="access-time" 
-                          size={14} 
-                          color={isEarlyCompletion ? "#3498DB" : isWithinGoal ? "#34C759" : "#FF3B30"} 
+                          name={DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.icon || 'access-time'} 
+                          size={12} 
+                          color={DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.color || '#007AFF'} 
                         />
-                        <Text style={[
-                          styles.modernTimeBadgeText,
-                          isEarlyCompletion && styles.earlyTimeBadgeText,
-                          isWithinGoal && !isEarlyCompletion && styles.withinGoalTimeBadgeText,
-                          !isWithinGoal && !isEarlyCompletion && styles.missedTimeBadgeText
-                        ]}>
-                          Verified at {verificationTime}
+                        <Text style={styles.goalInfoText}>
+                          {DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange}
                         </Text>
                       </View>
                     )}
                   </View>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.unverifiedStatusContainer}>
-                {!dailyGoal || !isPastGoalTime(dailyGoal) ? (
-                  <View style={styles.modernStatusIconContainer}>
-                    <MaterialIcons name="hotel" size={32} color={colors.primary} />
-                  </View>
-                ) : null}
-                <View style={styles.statusTextContainer}>
-                  {dailyGoal && !isPastGoalTime(dailyGoal) && (
-                    <View style={styles.statusHeaderContainer}>
-                      <Text style={styles.unverifiedStatusTitle}>Ready for Today?</Text>
-                    </View>
-                  )}
                   
                   {dailyGoal && isPastGoalTime(dailyGoal) && (
-                    <View style={styles.timeCheckContainer}>
-                      <View style={[styles.timeCheckIconContainer, styles.timeCheckIconContainerLate]}>
-                        <MaterialIcons name="access-time" size={28} color="#FF3B30" />
-                      </View>
-                      <View style={styles.timeCheckContent}>
-                        <Text style={styles.timeCheckTitle}>Time Check</Text>
-                        <Text style={styles.timeCheckText}>
-                          Goal time passed, but you can still complete today's challenge!
-                        </Text>
-                      </View>
+                    <View style={styles.lateStatusBadge}>
+                      <MaterialIcons name="warning" size={12} color="#FF9500" />
+                      <Text style={styles.lateStatusBadgeText}>Goal time passed</Text>
                     </View>
                   )}
-                  
-                  {/* Daily Goal Badge - Show when not past goal time */}
-                  {dailyGoal && !isPastGoalTime(dailyGoal) && (
-                    <View style={styles.goalBadgeContainer}>
-                      <View style={styles.dailyGoalBadge}>
-                        <MaterialIcons 
-                          name={DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.icon || 'access-time'} 
-                          size={16} 
-                          color={DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.color || colors.primary} 
-                        />
-                        <Text style={styles.dailyGoalText}>
-                          Today's Goal: {DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  
-                  {/* Motivational message - Only show when not past goal time */}
-                  {dailyGoal && !isPastGoalTime(dailyGoal) && (
-                    <Text style={styles.verificationPromptText}>
+                </View>
+                
+                <View style={styles.statusContent}>
+                  {dailyGoal && !isPastGoalTime(dailyGoal) ? (
+                    <Text style={styles.statusMessage}>
                       Make your bed during your {DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange || 'morning'} goal time to build a consistent habit!
+                    </Text>
+                  ) : (
+                    <Text style={styles.statusMessage}>
+                      It's past your goal time, but you can still complete today's challenge!
                     </Text>
                   )}
                   
                   {currentStreak > 1 && (
-                    <View style={styles.streakMiniContainer}>
-                      <MaterialIcons name="local-fire-department" size={16} color="#FF9500" />
-                      <Text style={styles.streakMiniText}>
-                        {currentStreak} day streak! Keep it going!
-                      </Text>
+                    <View style={styles.streakInfoContainer}>
+                      <View style={styles.streakInfoIcon}>
+                        <MaterialIcons name="local-fire-department" size={20} color="#FFF" />
+                      </View>
+                      <View style={styles.streakInfoContent}>
+                        <Text style={styles.streakInfoTitle}>
+                          {currentStreak} Day Streak Active
+                        </Text>
+                        <Text style={styles.streakInfoDescription}>
+                          Verify your bed today before midnight to maintain your streak!
+                        </Text>
+                      </View>
                     </View>
                   )}
                   
                   <TouchableOpacity 
-                    style={[
-                      styles.modernVerifyButton,
-                      dailyGoal && isPastGoalTime(dailyGoal) && styles.modernLateVerifyButton
-                    ]}
+                    style={styles.verifyButton}
                     onPress={handleVerifyBed}
+                    activeOpacity={0.7}
                   >
-                    <MaterialIcons name="camera-alt" size={20} color="white" />
-                    <Text style={styles.modernVerifyButtonText}>
-                      Verify Your Bed
-                    </Text>
+                    <LinearGradient
+                      colors={dailyGoal && isPastGoalTime(dailyGoal) 
+                        ? ['#FF9500', '#F08300'] 
+                        : ['#007AFF', '#0055D6']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.buttonBackground}
+                    >
+                      <MaterialIcons 
+                        name={dailyGoal && isPastGoalTime(dailyGoal) ? "hotel" : "camera-alt"} 
+                        size={18} 
+                        color="white" 
+                      />
+                      <Text style={styles.buttonText}>
+                        {dailyGoal && isPastGoalTime(dailyGoal) 
+                          ? "Make Your Bed Now"
+                          : "Verify Your Bed"}
+                      </Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
           </Surface>
-        </View>
+        </Animated.View>
 
         {/* Streak Section - Only show for non-new users */}
         {!isNewUser && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Streaks</Text>
+          <Animated.View 
+            style={[
+              styles.section, 
+              { 
+                opacity: fadeAnimStreaks, 
+                transform: [{ translateY: slideAnimStreaks }],
+                marginBottom: 16
+              }
+            ]}
+          >
+            <View style={styles.sectionHeaderContainer}>
+              <View style={styles.statsHeaderLeft}>
+                <MaterialIcons name="local-fire-department" size={16} color="#FF9500" style={{ marginRight: 5 }} />
+                <Text style={styles.sectionHeader}>YOUR STREAKS</Text>
+              </View>
+            </View>
             <View style={styles.streakCardsContainer}>
-              {/* Current Streak Card */}
-              <Surface style={styles.modernStreakCard}>
-                <Text style={styles.modernStreakValue}>{currentStreak}</Text>
-                <View style={styles.modernStreakLabelContainer}>
-                  <MaterialIcons name="local-fire-department" size={20} color={colors.primary} style={styles.modernStreakIcon} />
-                  <Text style={styles.modernStreakLabel}>Current</Text>
+              {/* Current Streak */}
+              <Surface style={styles.streakCard}>
+                <View style={styles.streakContent}>
+                  <View style={styles.streakInfo}>
+                    <Text style={styles.streakLabel}>Current Streak</Text>
+                    <Text style={styles.streakValue}>{currentStreak}</Text>
+                    <Text style={styles.streakUnit}>days</Text>
+                  </View>
+                  <View style={[styles.streakIconContainer, { backgroundColor: '#007AFF' }]}>
+                    <MaterialIcons name="local-fire-department" size={26} color="white" />
+                  </View>
                 </View>
               </Surface>
-
-              {/* Best Streak Card */}
-              <Surface style={styles.modernStreakCard}>
-                <Text style={styles.modernStreakValue}>{bestStreak}</Text>
-                <View style={styles.modernStreakLabelContainer}>
-                  <MaterialIcons name="star" size={20} color="#3498DB" style={styles.modernStreakIcon} />
-                  <Text style={styles.modernStreakLabel}>Best</Text>
+              
+              {/* Longest Streak */}
+              <Surface style={styles.streakCard}>
+                <View style={styles.streakContent}>
+                  <View style={styles.streakInfo}>
+                    <Text style={styles.streakLabel}>Longest Streak</Text>
+                    <Text style={styles.streakValue}>{bestStreak}</Text>
+                    <Text style={styles.streakUnit}>days</Text>
+                  </View>
+                  <View style={[styles.streakIconContainer, { backgroundColor: '#FF9500' }]}>
+                    <MaterialIcons name="emoji-events" size={26} color="white" />
+                  </View>
                 </View>
               </Surface>
             </View>
-          </View>
+          </Animated.View>
+        )}
+
+        {/* Quote Section - Only show for non-new users - COMPACT VERSION */}
+        {!isNewUser && (
+          <Animated.View 
+            style={[
+              { 
+                opacity: fadeAnimQuote, 
+                transform: [{ translateY: slideAnimQuote }],
+                marginBottom: 32,
+                marginTop: 8
+              }
+            ]}
+          >
+            <Surface style={styles.compactQuoteCard}>
+              <MaterialIcons name="format-quote" size={24} color={colors.primary} style={styles.quoteIcon} />
+              <Text style={styles.quoteText}>{dailyQuote.text}</Text>
+              <Text style={styles.quoteAuthor}>— {dailyQuote.author}</Text>
+            </Surface>
+          </Animated.View>
         )}
 
         {/* New User Benefits Section - Only show for new users */}
         {isNewUser && (
-          <View style={styles.section}>
+          <Animated.View 
+            style={[
+              styles.section, 
+              { 
+                opacity: fadeAnimStreaks, 
+                transform: [{ translateY: slideAnimStreaks }],
+                marginBottom: 32
+              }
+            ]}
+          >
             <Text style={styles.sectionTitle}>Why Make Your Bed?</Text>
             <Surface style={styles.enhancedBenefitsCard}>
               <View style={styles.benefitItem}>
@@ -913,23 +1128,7 @@ const HomeScreen = () => {
                 </View>
               </View>
             </Surface>
-          </View>
-        )}
-
-        {/* Quote Section - Only show for non-new users */}
-        {!isNewUser && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Daily Brew of Inspiration</Text>
-            <Surface style={styles.enhancedQuoteCard}>
-              <View style={[styles.quoteIconContainer, { backgroundColor: '#000000' }]}>
-                <MaterialIcons name="format-quote" size={24} color="white" />
-              </View>
-              <View style={styles.quoteContent}>
-                <Text style={styles.quoteText}>{dailyQuote.text}</Text>
-                <Text style={styles.quoteAuthor}>— {dailyQuote.author}</Text>
-              </View>
-            </Surface>
-          </View>
+          </Animated.View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -939,29 +1138,14 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // Light gray background like in the image
-  },
-  header: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.primary,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  headerIcon: {
-    position: 'absolute',
-    right: 15,
+    backgroundColor: '#F8F9FA',
   },
   content: {
     flex: 1,
-    padding: 15,
+    paddingHorizontal: 20,
   },
   section: {
-    marginBottom: 20,
+    marginTop: 24,
   },
   greetingContainer: {
     flexDirection: 'row',
@@ -972,418 +1156,419 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text.primary,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#111827',
     marginBottom: 5,
+    letterSpacing: -0.5,
   },
   date: {
     fontSize: 16,
-    color: colors.text.secondary,
-    marginBottom: 10,
+    color: '#6B7280',
+    letterSpacing: 0.1,
+  },
+  debugContainer: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
+  },
+  debugText: {
+    color: 'gray', 
+    fontSize: 12
+  },
+  debugButtonsContainer: {
+    flexDirection: 'row', 
+    marginTop: 5,
+    gap: 10
+  },
+  debugButton: {
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+  },
+  debugButtonText: {
+    color: '#3B82F6', 
+    fontSize: 12,
+    fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text.primary,
+    fontWeight: '700',
+    color: '#374151',
     marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  avatarContainer: {
+    marginLeft: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   statusCard: {
-    borderRadius: 10,
-    elevation: 2,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
     overflow: 'hidden',
+  },
+  statusContainer: {
+    padding: 0,
   },
   statusHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#F2F2F7',
   },
-  madeBadge: {
-    backgroundColor: colors.success,
+  iosIconWrapper: {
+    marginRight: 12,
   },
-  notMadeBadge: {
-    backgroundColor: colors.error,
-  },
-  verifyContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  verifyText: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  verifyButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  iosIconBackground: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  verifyButtonText: {
-    color: 'white',
-    fontSize: 16,
+  statusTitleContainer: {
+    flex: 1,
+  },
+  statusTitle: {
+    fontSize: 17,
     fontWeight: '600',
+    color: '#1D1D1F',
+    letterSpacing: -0.4,
+    marginBottom: 2,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'white',
+    marginLeft: 3,
+    letterSpacing: -0.2,
+  },
+  missedBadge: {
+    backgroundColor: '#FFEFEF',
+    borderWidth: 1,
+    borderColor: '#FFCCCB',
+  },
+  missedBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#FF3B30',
+    marginLeft: 3,
+    letterSpacing: -0.2,
+  },
+  lateBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#FF9500',
+    letterSpacing: -0.2,
+  },
+  earlyBadge: {
+    backgroundColor: '#5856D6',
+  },
+  goalBadge: {
+    backgroundColor: '#34C759',
+  },
+  missedGoalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEFEF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFCCCB',
     marginLeft: 8,
   },
-  verifiedContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  verifiedText: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  earlyBirdContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF9C4',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  earlyBirdText: {
-    color: '#F57F17',
-    fontWeight: 'bold',
-    fontSize: 12,
+  missedGoalBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF3B30',
     marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  goalInfoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+    alignSelf: 'flex-start',
+  },
+  goalInfoText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#3A3A3C',
+    marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  lateStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7E9',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FFEAD0',
+    marginLeft: 8,
+  },
+  lateStatusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF9500',
+    marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  statusContent: {
+    padding: 16,
+    paddingTop: 8,
+  },
+  statusMessage: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#3A3A3C',
+    marginBottom: 16,
+    letterSpacing: -0.2,
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  timeBadgeText: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  earlyTimeBadge: {
+    backgroundColor: '#E5F1FF',
+    borderWidth: 1,
+    borderColor: '#CCE4FF',
+  },
+  earlyTimeBadgeText: {
+    color: '#007AFF',
+  },
+  onTimeTimeBadge: {
+    backgroundColor: '#E5F9ED',
+    borderWidth: 1,
+    borderColor: '#CCECD9',
+  },
+  onTimeTimeBadgeText: {
+    color: '#34C759',
+  },
+  lateTimeBadge: {
+    backgroundColor: '#FFEFEF',
+    borderWidth: 1,
+    borderColor: '#FFCCCB',
+  },
+  lateTimeBadgeText: {
+    color: '#FF3B30',
+  },
+  streakInfoContainer: {
+    backgroundColor: '#FFF9EB',
+    borderRadius: 12,
+    marginBottom: 16,
+    padding: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9500',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  streakInfoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FF9500',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  streakInfoContent: {
+    flex: 1,
+  },
+  streakInfoTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  streakInfoDescription: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
+  },
+  verifyButton: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  buttonBackground: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+    letterSpacing: -0.1,
   },
   streakCardsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+    marginBottom: 16,
   },
-  modernStreakCard: {
+  streakCard: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
     backgroundColor: 'white',
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    padding: 16,
   },
-  modernStreakValue: {
-    fontSize: 36,
+  streakContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  streakInfo: {
+    flex: 1,
+  },
+  streakLabel: {
+    fontSize: 13,
+    color: '#6E6E73',
+    fontWeight: '500',
+    letterSpacing: -0.1,
+    marginBottom: 4,
+  },
+  streakValue: {
+    fontSize: 32,
     fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 8,
+    color: '#1D1D1F',
+    letterSpacing: -0.5,
   },
-  modernStreakLabelContainer: {
+  streakUnit: {
+    fontSize: 12,
+    color: '#6E6E73',
+    fontWeight: '500',
+    letterSpacing: -0.1,
+  },
+  streakIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6E6E73',
+    letterSpacing: 0.5,
+  },
+  statsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  modernStreakIcon: {
-    marginRight: 6,
-  },
-  modernStreakLabel: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    fontWeight: '500',
-  },
-  enhancedQuoteCard: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 4,
+  quoteCard: {
+    borderRadius: 20,
+    padding: 24,
+    backgroundColor: 'white',
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 12,
   },
-  quoteIconContainer: {
-    backgroundColor: colors.primary,
-    padding: 16,
-    alignItems: 'flex-start',
-  },
-  quoteContent: {
+  compactQuoteCard: {
+    borderRadius: 16,
     padding: 16,
     backgroundColor: 'white',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  quoteIcon: {
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+    opacity: 0.2,
   },
   quoteText: {
     fontSize: 16,
+    color: '#1F2937',
+    lineHeight: 22,
+    fontWeight: '500',
     fontStyle: 'italic',
-    color: colors.text.primary,
-    marginBottom: 12,
-    lineHeight: 24,
+    marginBottom: 8,
   },
   quoteAuthor: {
     fontSize: 14,
-    color: colors.text.secondary,
-    textAlign: 'right',
+    color: '#6B7280',
+    alignSelf: 'flex-end',
     fontWeight: '500',
-  },
-  modernStatusCard: {
-    borderRadius: 20,
-    backgroundColor: 'white',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    padding: 20,
-  },
-  modernStatusIconContainer: {
-    backgroundColor: '#F5F7FA',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  modernStatusTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 8,
-  },
-  modernStatusMessage: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  modernTimeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E9F0',
-    marginRight: 8,
-    flex: 0,
-  },
-  modernTimeBadgeText: {
-    color: colors.text.primary,
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  modernLateVerificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFF1F0',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  modernLateVerificationIconContainer: {
-    backgroundColor: '#FFE5E5',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  modernLateVerificationTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FF3B30',
-    marginBottom: 6,
-  },
-  modernLateVerificationText: {
-    fontSize: 15,
-    color: '#FF3B30',
-    lineHeight: 22,
-    opacity: 0.9,
-  },
-  modernVerifyButton: {
-    flexDirection: 'row',
-    backgroundColor: '#000000',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  modernVerifyButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  modernLateVerifyButton: {
-    backgroundColor: '#000000',
-    elevation: 2,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  verifiedStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  statusTextContainer: {
-    flex: 1,
-  },
-  statusHeaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  goalStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    marginTop: -2,
-  },
-  goalStatusText: {
-    fontWeight: '500',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  withinGoalBadge: {
-    backgroundColor: '#34C759',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  notWithinGoalBadge: {
-    backgroundColor: '#FFF3E0',
-  },
-  withinGoalText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  notWithinGoalText: {
-    color: '#FFA726',
-  },
-  unverifiedStatusContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'flex-start',
-  },
-  newUserTextContainer: {
-    paddingLeft: 8, // Add a bit of padding when there's no icon
-  },
-  newUserTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 8,
-  },
-  newUserMessage: {
-    fontSize: 16,
-    color: colors.text.primary,
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  earlyVerificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  earlyVerificationText: {
-    color: '#F57C00',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  lateVerificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFF1F0',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  lateVerificationIconContainer: {
-    backgroundColor: '#FFE5E5',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    position: 'relative',
-  },
-  lateVerificationIconOverlay: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FF3B30',
-  },
-  lateVerificationContent: {
-    flex: 1,
-  },
-  lateVerificationTitle: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  lateVerificationText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-    opacity: 0.9,
-  },
-  lateVerifyButton: {
-    backgroundColor: '#FF3B30',
-  },
-  setGoalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    marginTop: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  setGoalButtonText: {
-    color: colors.primary,
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
-    marginRight: 8,
-    flex: 1,
   },
   enhancedBenefitsCard: {
     borderRadius: 12,
@@ -1416,222 +1601,122 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: 17,
   },
-  newUserVerifyButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+  goalMissedContainer: {
+    backgroundColor: '#FFF9EB',
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  newUserVerifyButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 12,
-  },
-  earlyCompletionBadge: {
-    backgroundColor: '#8E44AD',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-    marginTop: -2,
-  },
-  earlyCompletionText: {
-    color: 'white',
-    fontWeight: '700',
-  },
-  earlyTimeBadge: {
-    backgroundColor: '#E8F5FF',
-    borderWidth: 1,
-    borderColor: '#3498DB',
-  },
-  earlyTimeBadgeText: {
-    color: '#3498DB',
-    fontWeight: '700',
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 12,
-  },
-  avatarContainer: {
-    marginLeft: 16,
-    borderRadius: 22,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  missedGoalBadge: {
-    backgroundColor: '#FFEBEB',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginTop: -2,
-  },
-  missedGoalText: {
-    color: '#FF3B30',
-    fontWeight: '600',
-  },
-  goalBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  dailyGoalBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    marginRight: 8,
-    backgroundColor: '#F5F7FA',
-    borderWidth: 1,
-    borderColor: '#E5E9F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  dailyGoalText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginLeft: 6,
-  },
-  verificationPromptText: {
-    fontSize: 16,
-    color: colors.text.secondary,
     marginBottom: 16,
-    lineHeight: 22,
-  },
-  withinGoalTimeBadge: {
-    backgroundColor: '#E8F8EF',
-    borderWidth: 1,
-    borderColor: '#34C759',
-  },
-  withinGoalTimeBadgeText: {
-    color: '#34C759',
-    fontWeight: '700',
-  },
-  goalInfoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E9F0',
-    flex: 0,
-  },
-  goalInfoText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text.primary,
-    marginLeft: 6,
-  },
-  streakMiniContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    backgroundColor: '#FFF8E1',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    padding: 16,
     borderLeftWidth: 3,
     borderLeftColor: '#FF9500',
-  },
-  streakMiniText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FF9500',
-    marginLeft: 6,
-  },
-  streakReminderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: '#FFF8E1',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF9500',
-    justifyContent: 'center',
-  },
-  streakReminderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FF9500',
-    marginLeft: 6,
-  },
-  unverifiedStatusTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 8,
-  },
-  timeCheckContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
   },
-  timeCheckIconContainer: {
-    backgroundColor: '#F5F5F7',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  goalMissedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FF9500',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  timeCheckIconContainerLate: {
-    backgroundColor: '#FFEBEB', // Light red background
-  },
-  timeCheckContent: {
+  goalMissedContent: {
     flex: 1,
   },
-  timeCheckTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 6,
-  },
-  timeCheckText: {
+  goalMissedTitle: {
     fontSize: 16,
-    color: '#666666',
-    lineHeight: 22,
-    marginBottom: 0,
-  },
-  missedTimeBadge: {
-    backgroundColor: '#FFEBEB',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-  },
-  missedTimeBadgeText: {
-    color: '#FF3B30',
     fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  goalMissedDescription: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  // Morning Goal Tip styles
+  morningTipCard: {
+    marginTop: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: '#F8F8FA',
+    overflow: 'hidden',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  morningTipContent: {
+    flexDirection: 'row',
+    padding: 16,
+    alignItems: 'flex-start',
+  },
+  checkboxContainer: {
+    marginRight: 14,
+    marginTop: 8,
+  },
+  tipContentContainer: {
+    flex: 1,
+  },
+  morningTipBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FF3B30',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  morningTipBadgeText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  morningTipText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#4F4F4F',
+    lineHeight: 20,
+  },
+  verifiedAtContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  earlyVerifiedContainer: {
+    backgroundColor: '#F0EFFF',
+    borderColor: '#E2E1FF',
+  },
+  onTimeVerifiedContainer: {
+    backgroundColor: '#F0FFF5',
+    borderColor: '#D4F5D4',
+  },
+  lateVerifiedContainer: {
+    backgroundColor: '#F2F2F7',
+    borderColor: '#E5E5EA',
+  },
+  verifiedAtText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#6E6E73',
+    marginLeft: 3,
+    letterSpacing: -0.2,
+  },
+  earlyVerifiedText: {
+    color: '#5856D6',
+  },
+  onTimeVerifiedText: {
+    color: '#34C759',
+  },
+  lateVerifiedText: {
+    color: '#6E6E73',
   },
 });
 

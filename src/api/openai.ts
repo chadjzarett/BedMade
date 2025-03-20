@@ -2,12 +2,12 @@ import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from './supabase';
-import { API } from '../constants/config';
+import { API, STORAGE_KEYS } from '../constants/config';
 
 // Constants
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_VISION_MODEL = API.OPENAI_MODEL;
-const OPENAI_API_KEY_STORAGE_KEY = 'openai_api_key';
+const OPENAI_API_KEY_STORAGE_KEY = STORAGE_KEYS.OPENAI_API_KEY;
 
 /**
  * Analyze a bed image using OpenAI's Vision API
@@ -20,6 +20,18 @@ export const analyzeBedImage = async (imageUri: string): Promise<{
   confidence?: number;
 }> => {
   try {
+    // Get the API key from secure storage or config
+    const apiKey = await getOpenAIApiKey();
+    
+    if (!apiKey) {
+      console.error('No OpenAI API key available');
+      return {
+        success: false,
+        isMade: false,
+        message: 'API key not configured. Please set up your OpenAI API key in settings.'
+      };
+    }
+
     // Convert image to base64
     const base64Image = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -60,7 +72,7 @@ export const analyzeBedImage = async (imageUri: string): Promise<{
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API.OPENAI_API_KEY}`
+          'Authorization': `Bearer ${apiKey}`
         },
         timeout: 30000 // 30 second timeout
       }
@@ -95,8 +107,20 @@ export const analyzeBedImage = async (imageUri: string): Promise<{
                  (isMade ? 'made.' : 'not made properly.')
       };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error analyzing bed image:', error);
+    
+    // Handle specific error cases
+    if (axios.isAxiosError(error) && error.response) {
+      if (error.response.status === 401) {
+        return {
+          success: false,
+          isMade: false,
+          message: 'Authentication failed. Please check your OpenAI API key in settings.'
+        };
+      }
+    }
+    
     return {
       success: false,
       isMade: false,
@@ -109,8 +133,8 @@ export const analyzeBedImage = async (imageUri: string): Promise<{
  * Check if the OpenAI API is available
  */
 export const isOpenAIApiKeySet = async (): Promise<boolean> => {
-  // Since we're using a hardcoded API key, this will always return true
-  return true;
+  const apiKey = await getOpenAIApiKey();
+  return !!apiKey && apiKey !== 'sk-your-actual-openai-api-key';
 };
 
 /**
@@ -118,9 +142,14 @@ export const isOpenAIApiKeySet = async (): Promise<boolean> => {
  */
 export const getOpenAIApiKey = async (): Promise<string | null> => {
   try {
-    // For this app, we're using the API key from config
-    // But we'll still support the secure storage method for flexibility
-    return API.OPENAI_API_KEY;
+    // First try to get from secure storage
+    const storedKey = await SecureStore.getItemAsync(OPENAI_API_KEY_STORAGE_KEY);
+    if (storedKey) {
+      return storedKey;
+    }
+    
+    // Fall back to config if not in secure storage
+    return API.OPENAI_API_KEY !== 'sk-your-actual-openai-api-key' ? API.OPENAI_API_KEY : null;
   } catch (error) {
     console.error('Error getting OpenAI API key:', error);
     return null;
@@ -132,9 +161,7 @@ export const getOpenAIApiKey = async (): Promise<string | null> => {
  */
 export const setOpenAIApiKey = async (apiKey: string): Promise<boolean> => {
   try {
-    // For this app, we're using the API key from config
-    // But we'll still support the secure storage method for flexibility
-    // This is a no-op since we're using the API key from config
+    await SecureStore.setItemAsync(OPENAI_API_KEY_STORAGE_KEY, apiKey);
     return true;
   } catch (error) {
     console.error('Error setting OpenAI API key:', error);

@@ -19,7 +19,9 @@ export const TIMING = {
 
 // API endpoints and keys (to be replaced with actual values)
 export const API = {
-  OPENAI_API_KEY: 'YOUR_OPENAI_API_KEY', // Replace with your actual key from .env file
+  // Replace this with your actual OpenAI API key
+  // For security, consider using environment variables or secure storage
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'sk-your-actual-openai-api-key',
   OPENAI_MODEL: 'gpt-4o', // OpenAI model to use
 };
 
@@ -28,6 +30,7 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth_token',
   USER_PROFILE: 'user_profile',
   SETTINGS: 'user_settings',
+  OPENAI_API_KEY: 'openai_api_key', // Add a storage key for the OpenAI API key
 };
 
 // Navigation routes

@@ -508,7 +508,7 @@ const StatsScreen = () => {
               <Surface style={[styles.modernCard, styles.journeyCard]}>
                 <View style={styles.journeyContainer}>
                   <View style={styles.journeyIconContainer}>
-                    <MaterialIcons name="flag" size={24} color="#5856D6" />
+                    <MaterialIcons name="flag" size={26} color="#5856D6" />
                   </View>
                   <View style={styles.journeyContent}>
                     <Text style={styles.journeyTitle}>Journey Started</Text>
@@ -519,7 +519,7 @@ const StatsScreen = () => {
             )}
 
             {/* Stats Header with Refresh */}
-            <View style={styles.sectionHeaderContainer}>
+            <View style={[styles.sectionHeaderContainer, { marginTop: 12 }]}>
               <View style={styles.statsHeaderLeft}>
                 <MaterialIcons name="insert-chart" size={16} color="#007AFF" style={{ marginRight: 5 }} />
                 <Text style={styles.sectionHeader}>DETAILED STATS</Text>
@@ -528,50 +528,104 @@ const StatsScreen = () => {
                 style={styles.refreshIconButton}
                 onPress={loadUserStats}
               >
-                <MaterialIcons name="refresh" size={20} color={colors.primary} />
-                {/* Green dot indicator */}
+                <MaterialIcons name="refresh" size={20} color="#007AFF" />
                 <View style={styles.refreshIndicator} />
               </TouchableOpacity>
             </View>
 
-            <Surface style={styles.modernCard}>
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#34C759' }]}>
-                    <MaterialIcons name="hotel" size={24} color="white" />
+            {/* Stats Grid - Apple-style grid of stats */}
+            <Surface style={styles.statsCardContainer}>
+              <View style={styles.statsGrid}>
+                {/* Total Beds Made */}
+                <View style={styles.statItem}>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#E9F7FF' }]}>
+                    <MaterialIcons name="hotel" size={25} color="#007AFF" />
                   </View>
+                  <Text style={styles.statLabel}>Total Beds</Text>
                   <Text style={styles.statValue}>{stats.totalBedsMade}</Text>
-                  <Text style={styles.statLabel}>Total Beds Made</Text>
                 </View>
                 
-                <View style={styles.statCard}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#007AFF' }]}>
-                    <MaterialIcons name="pie-chart" size={24} color="white" />
+                {/* Completion Rate */}
+                <View style={styles.statItem}>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#E9FFF0' }]}>
+                    <MaterialIcons name="pie-chart" size={25} color="#34C759" />
                   </View>
+                  <Text style={styles.statLabel}>Completion</Text>
                   <Text style={styles.statValue}>{stats.completionRate}%</Text>
-                  <Text style={styles.statLabel}>Completion Rate</Text>
+                </View>
+                
+                {/* Early Bird Rate */}
+                <View style={styles.statItem}>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#FFF7E9' }]}>
+                    <MaterialIcons name="wb-sunny" size={25} color="#FF9500" />
+                  </View>
+                  <Text style={styles.statLabel}>Early Bird</Text>
+                  <Text style={styles.statValue}>{stats.earlyBirdRate}%</Text>
+                </View>
+                
+                {/* Average Time */}
+                <View style={styles.statItem}>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#F2E9FF' }]}>
+                    <MaterialIcons name="access-time" size={25} color="#5856D6" />
+                  </View>
+                  <Text style={styles.statLabel}>Avg. Time</Text>
+                  <Text style={styles.statValue}>{stats.averageTime}</Text>
                 </View>
               </View>
             </Surface>
 
+            {/* Current & Longest Streak Cards - REPLACED WITH RECENT BADGES */}
             <Surface style={styles.modernCard}>
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#FFD700' }]}>
-                    <MaterialIcons name="wb-sunny" size={24} color="white" />
-                  </View>
-                  <Text style={styles.statValue}>{stats.earlyBirdRate}%</Text>
-                  <Text style={styles.statLabel}>Early Bird Rate</Text>
-                  <Text style={styles.statSubLabel}>(Before 8 AM)</Text>
+              <View style={styles.recentBadgesContainer}>
+                <View style={styles.recentBadgesHeader}>
+                  <Text style={styles.recentBadgesTitle}>Recent Badges</Text>
+                  <Text style={styles.recentBadgesSubtitle}>Last 7 Days</Text>
                 </View>
-                
-                <View style={styles.statCard}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#8E44AD' }]}>
-                    <MaterialIcons name="access-time" size={24} color="white" />
+                {/* Show recent badges earned in the last 7 days */}
+                {achievements.earned.filter(earned => {
+                  // Check if earned in the last 7 days
+                  const earnedDate = new Date(earned.earned_at);
+                  const now = new Date();
+                  const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+                  return earnedDate >= sevenDaysAgo;
+                }).length > 0 ? (
+                  <View style={styles.badgesGrid}>
+                    {achievements.earned
+                      .filter(earned => {
+                        // Filter achievements earned in the last 7 days
+                        const earnedDate = new Date(earned.earned_at);
+                        const now = new Date();
+                        const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+                        return earnedDate >= sevenDaysAgo;
+                      })
+                      .slice(0, 3) // Take at most 3 recent badges
+                      .map(earned => {
+                        const achievement = achievements.all.find(a => a.id === earned.achievement_id);
+                        if (!achievement) return null;
+                        
+                        return (
+                          <View key={earned.id} style={styles.badgeItem}>
+                            <View style={[
+                              styles.badgeIconCircle,
+                              { backgroundColor: getAchievementColor(achievement.code) + '15' }
+                            ]}>
+                              <MaterialIcons 
+                                name={achievement.icon_name as any} 
+                                size={28} 
+                                color={getAchievementColor(achievement.code)} 
+                              />
+                            </View>
+                            <Text style={styles.badgeLabel}>{achievement.name}</Text>
+                          </View>
+                        );
+                      })
+                    }
                   </View>
-                  <Text style={styles.statValue}>{stats.averageTime}</Text>
-                  <Text style={styles.statLabel}>Average Time</Text>
-                </View>
+                ) : (
+                  <View style={styles.noBadgesContainer}>
+                    <Text style={styles.noBadgesText}>No recent badges</Text>
+                  </View>
+                )}
               </View>
             </Surface>
 
@@ -700,7 +754,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   header: {
-    padding: 15,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -708,76 +762,77 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text.primary,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    padding: 15,
+    padding: 16,
   },
   sectionHeaderContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginTop: 24,
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   sectionHeader: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#6E6E73',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   modernCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: 'white',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 20,
-    gap: 15,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 15,
-  },
-  iconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 4,
+  statsCardContainer: {
+    borderRadius: 16,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 8,
+  },
+  statItem: {
+    width: '50%',
+    padding: 12,
+    alignItems: 'center',
+  },
+  statIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   statLabel: {
-    fontSize: 15,
-    color: colors.text.secondary,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  statSubLabel: {
     fontSize: 13,
-    color: colors.text.disabled,
-    marginTop: 2,
-    textAlign: 'center',
+    color: '#6E6E73',
+    fontWeight: '500',
+    letterSpacing: -0.1,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    letterSpacing: -0.2,
   },
   refreshIconButton: {
     flexDirection: 'row',
@@ -785,35 +840,81 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   refreshIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#34C759',
     marginLeft: 4,
   },
+  streakCardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 24,
+  },
+  streakCard: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    padding: 16,
+  },
+  streakContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  streakInfo: {
+    flex: 1,
+  },
+  streakLabel: {
+    fontSize: 13,
+    color: '#6E6E73',
+    fontWeight: '500',
+    letterSpacing: -0.1,
+    marginBottom: 4,
+  },
+  streakValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#1D1D1F',
+    letterSpacing: -0.5,
+  },
+  streakUnit: {
+    fontSize: 12,
+    color: '#6E6E73',
+    fontWeight: '500',
+    letterSpacing: -0.1,
+  },
+  streakIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   achievementsContainer: {
-    padding: 15,
+    padding: 8,
   },
   achievementCard: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F5F5F7',
   },
   achievementIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginRight: 14,
   },
   achievementContent: {
     flex: 1,
@@ -843,21 +944,16 @@ const styles = StyleSheet.create({
   journeyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   journeyIconContainer: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: '#F0F0FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginRight: 14,
   },
   journeyContent: {
     flex: 1,
@@ -873,7 +969,63 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   journeyCard: {
-    marginBottom: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  recentBadgesContainer: {
+    padding: 16,
+  },
+  recentBadgesHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  recentBadgesTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1D1D1F',
+  },
+  recentBadgesSubtitle: {
+    fontSize: 12,
+    color: '#6E6E73',
+    fontWeight: '500',
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgeItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  badgeIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  badgeLabel: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 4,
+  },
+  noBadgesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  noBadgesText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6E6E73',
   },
 });
 

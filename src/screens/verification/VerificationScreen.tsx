@@ -120,7 +120,7 @@ class VerificationScreenClass extends React.Component<VerificationScreenProps, V
       
       // Launch camera
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -161,7 +161,7 @@ class VerificationScreenClass extends React.Component<VerificationScreenProps, V
       this.setState({ isProcessing: true });
       
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
