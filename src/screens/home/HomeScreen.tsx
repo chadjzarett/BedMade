@@ -513,13 +513,47 @@ const HomeScreen = () => {
 
         console.log('Sorted verification dates:', sortedDates);
 
-        // Calculate streaks with consecutive date check
+        // Check if the most recent verification is more than 1 day old
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Find the most recent date where bed was made
+        let mostRecentMadeDate = null;
+        for (let i = sortedDates.length - 1; i >= 0; i--) {
+          const [dateStr, isMade] = sortedDates[i];
+          if (isMade) {
+            mostRecentMadeDate = new Date(dateStr);
+            mostRecentMadeDate.setHours(0, 0, 0, 0);
+            break;
+          }
+        }
+        
+        let breakStreak = false;
+        
+        if (mostRecentMadeDate) {
+          const daysSinceLastEntry = Math.floor((today.getTime() - mostRecentMadeDate.getTime()) / (1000 * 60 * 60 * 24));
+          console.log('Days since last entry:', daysSinceLastEntry);
+          
+          // If the last entry is more than 1 day old, the streak is broken
+          if (daysSinceLastEntry > 1) {
+            console.log('Streak broken - last entry was more than 1 day ago');
+            breakStreak = true;
+            currentStreakCount = 0;
+            streakCount = 0;
+          }
+        }
+        
+        // Calculate best streak regardless of current streak status
+        // We need to calculate this even if current streak is broken
+        let tempStreakCount = 0;
+        
+        // Calculate best streak from all historical data
         for (let i = 0; i < sortedDates.length; i++) {
           const [currentDate, isMade] = sortedDates[i];
           
           if (isMade) {
-            if (streakCount === 0) {
-              streakCount = 1;
+            if (tempStreakCount === 0) {
+              tempStreakCount = 1;
             } else {
               // Check if dates are consecutive
               const prevDate = new Date(sortedDates[i - 1][0]);
@@ -528,23 +562,51 @@ const HomeScreen = () => {
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               
               if (diffDays === 1) {
-                streakCount++;
+                tempStreakCount++;
               } else {
-                streakCount = 1; // Reset to 1 since current day is made
+                tempStreakCount = 1; // Reset to 1 since current day is made
               }
             }
             
-            // Update best streak if current streak is higher
-            if (streakCount > bestStreakCount) {
-              bestStreakCount = streakCount;
+            // Update best streak if temp streak is higher
+            if (tempStreakCount > bestStreakCount) {
+              bestStreakCount = tempStreakCount;
             }
           } else {
-            streakCount = 0;
+            tempStreakCount = 0;
           }
         }
+        
+        // Only calculate current streak if it's not already broken
+        if (!breakStreak) {
+          // Calculate current streak with consecutive date check
+          for (let i = 0; i < sortedDates.length; i++) {
+            const [currentDate, isMade] = sortedDates[i];
+            
+            if (isMade) {
+              if (streakCount === 0) {
+                streakCount = 1;
+              } else {
+                // Check if dates are consecutive
+                const prevDate = new Date(sortedDates[i - 1][0]);
+                const currDate = new Date(currentDate);
+                const diffTime = currDate.getTime() - prevDate.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 1) {
+                  streakCount++;
+                } else {
+                  streakCount = 1; // Reset to 1 since current day is made
+                }
+              }
+            } else {
+              streakCount = 0;
+            }
+          }
 
-        // The current streak is the final streak count if it's still active
-        currentStreakCount = streakCount;
+          // The current streak is the final streak count if it's still active
+          currentStreakCount = streakCount;
+        }
 
         console.log('Calculated streak values:', {
           currentStreak: currentStreakCount,

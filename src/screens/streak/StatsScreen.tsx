@@ -237,7 +237,15 @@ const StatsScreen = () => {
           });
         }
         
-        const statsData = {
+        // Get user registration date
+        const { data: userData, error: userDataError } = await supabase
+          .from('users')
+          .select('created_at')
+          .eq('id', user.id)
+          .single();
+
+        // Create the basic stats data
+        const basicStatsData = {
           longestStreak,
           currentStreak,
           totalBedsMade: totalMade,
@@ -245,6 +253,45 @@ const StatsScreen = () => {
           earlyBirdRate: Math.round(earlyBirdRate),
           averageTime: averageTime,
         };
+        
+        // Create a copy of the basic stats that we can modify
+        const statsData = { ...basicStatsData };
+        
+        // Calculate more accurate completion rate based on total possible days since registration
+        if (userData?.created_at) {
+          const date = new Date(userData.created_at);
+          setRegistrationDate(date.toLocaleDateString('en-US', { 
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          }));
+          
+          const registrationDate = new Date(userData.created_at);
+          registrationDate.setHours(0, 0, 0, 0);
+          
+          // Calculate days since registration
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const diffTime = today.getTime() - registrationDate.getTime();
+          const totalDaysSinceRegistration = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include today
+          
+          console.log('Total days since registration:', totalDaysSinceRegistration);
+          
+          // Recalculate completion rate based on total possible days
+          if (totalDaysSinceRegistration > 0) {
+            const totalMade = recordsData?.filter(record => record.made)?.length || 0;
+            const updatedCompletionRate = (totalMade / totalDaysSinceRegistration) * 100;
+            
+            console.log('Updated completion rate calculation:', { 
+              totalMade, 
+              totalDaysSinceRegistration, 
+              updatedCompletionRate: Math.round(updatedCompletionRate) 
+            });
+            
+            // Update the statsData with the new completion rate
+            statsData.completionRate = Math.round(updatedCompletionRate);
+          }
+        }
         
         console.log('Setting stats:', statsData);
         setStats(statsData);
@@ -258,22 +305,6 @@ const StatsScreen = () => {
             statsData
           );
         }
-      }
-
-      // Get user registration date
-      const { data: userData, error: userDataError } = await supabase
-        .from('users')
-        .select('created_at')
-        .eq('id', user.id)
-        .single();
-
-      if (userData?.created_at) {
-        const date = new Date(userData.created_at);
-        setRegistrationDate(date.toLocaleDateString('en-US', { 
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        }));
       }
 
       console.log('Stats loading complete');
