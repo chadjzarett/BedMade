@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getTodayLocalDateString } from '../../utils/dateUtils';
 import { getUserProfile } from '../../api/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DevTesting from '../../components/DevTesting';
 
 // Define the daily goal options
 const DAILY_GOAL_INFO = {
@@ -81,6 +82,7 @@ const HomeScreen = () => {
   const [isEarlyCompletion, setIsEarlyCompletion] = React.useState(false);
   // Add state for avatar URL
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+  const [showDevMenu, setShowDevMenu] = React.useState(false);
 
   // Add animation values with proper staggered timing
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -324,11 +326,14 @@ const HomeScreen = () => {
       const profileResult = await getUserProfile();
       const profile = profileResult.profile;
       
+      // STEP 1: ALWAYS LOAD THE DAILY GOAL FIRST
+      // This is important to prevent timing issues where isWithinGoal checks are made with null goal
+      let finalGoal: string | null = null;
+      
       // Only load the daily goal if we haven't already loaded it
       if (!hasLoadedGoalRef.current) {
         console.log('Loading daily goal (not loaded yet)');
         // First, load the daily goal from all sources
-        let finalGoal: string | null = null;
         let asyncStorageGoal: string | null = null;
         
         // 1. Try AsyncStorage first for immediate value
@@ -401,7 +406,7 @@ const HomeScreen = () => {
           }
         }
         
-        // Set the final goal value
+        // Set the final goal value immediately - this is the important change
         console.log('Setting final daily goal to:', finalGoal);
         setDailyGoal(finalGoal);
         
@@ -409,8 +414,10 @@ const HomeScreen = () => {
         hasLoadedGoalRef.current = true;
       } else {
         console.log('Skipping daily goal load, already loaded. Current value:', dailyGoal);
+        finalGoal = dailyGoal; // Use the existing dailyGoal value
       }
       
+      // STEP 2: AFTER GOAL IS LOADED, CHECK VERIFICATION STATUS
       // Get today's verification record
       const { data: todayRecord, error: recordError } = await supabase
         .from('daily_records')
@@ -421,6 +428,7 @@ const HomeScreen = () => {
 
       // Log the entire today's record for debugging
       console.log('Raw today\'s record:', JSON.stringify(todayRecord, null, 2));
+      console.log('Current goal setting:', finalGoal); // Use finalGoal here, not dailyGoal
 
       let verifiedToday = false;
 
@@ -453,15 +461,23 @@ const HomeScreen = () => {
         
         if (verifiedToday && todayRecord?.made_time) {
           const madeTime = new Date(todayRecord.made_time);
+          console.log('Made time parsed from database:', {
+            originalTimeString: todayRecord.made_time,
+            parsedTime: madeTime.toLocaleString(),
+            hours: madeTime.getHours(),
+            minutes: madeTime.getMinutes(),
+            currentGoal: finalGoal // Use finalGoal here instead of dailyGoal
+          });
+          
           setVerificationTime(formatVerificationTime(madeTime));
           
-          // Check time status if we have a daily goal
+          // Check time status with the finalGoal value that we've loaded
           let timeStatus = { isWithinGoal: false, isEarly: false };
-          if (dailyGoal) {
-            timeStatus = checkIsWithinGoalTime(madeTime, dailyGoal);
+          if (finalGoal) {
+            timeStatus = checkIsWithinGoalTime(madeTime, finalGoal);
             console.log('Time status check:', {
               madeTime: madeTime.toLocaleString(),
-              dailyGoal,
+              dailyGoal: finalGoal,
               timeStatus
             });
             setIsWithinGoal(timeStatus.isWithinGoal);
@@ -484,6 +500,7 @@ const HomeScreen = () => {
         }
       }
 
+      // STEP 3: CALCULATE STREAKS AND OTHER DATA
       // Get all verification records to calculate streaks correctly
       const { data: recordsData, error: recordsError } = await supabase
         .from('daily_records')
@@ -638,7 +655,7 @@ const HomeScreen = () => {
         console.log('Updated state with calculated data:', {
           currentStreak: currentStreakCount,
           bestStreak: bestStreakCount,
-          dailyGoal: dailyGoal,
+          dailyGoal: finalGoal,
           totalBedsMade: totalMade,
           isNewUser: newUserStatus,
           hasVerifiedToday: verifiedToday
@@ -677,6 +694,13 @@ const HomeScreen = () => {
     navigation.navigate('Profile' as any);
   };
 
+  // Handle dev menu toggle for testing
+  const handleDevMenuToggle = () => {
+    if (__DEV__) {
+      setShowDevMenu(true);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -713,7 +737,12 @@ const HomeScreen = () => {
 
   // Update the checkIsWithinGoalTime function to handle early completions
   const checkIsWithinGoalTime = (verificationDate: Date, goalType: string): { isWithinGoal: boolean; isEarly: boolean } => {
-    console.log('Checking if within goal time:', { verificationDate, goalType });
+    console.log('Checking if within goal time:', { 
+      verificationDate: verificationDate.toLocaleString(), 
+      goalType,
+      verificationHour: verificationDate.getHours(),
+      verificationMinute: verificationDate.getMinutes()
+    });
     
     const hour = verificationDate.getHours();
     const minute = verificationDate.getMinutes();
@@ -723,26 +752,40 @@ const HomeScreen = () => {
     
     let result = { isWithinGoal: false, isEarly: false };
     
+    // Enhanced time check with better logging
     switch (goalType) {
       case 'early':
+        // 6am-8am
+        const earlyStart = 6 * 60;  // 6:00 AM in minutes
+        const earlyEnd = 8 * 60;    // 8:00 AM in minutes
         result = {
-          isWithinGoal: timeInMinutes >= 6 * 60 && timeInMinutes < 8 * 60,
-          isEarly: timeInMinutes < 6 * 60
+          isWithinGoal: timeInMinutes >= earlyStart && timeInMinutes < earlyEnd,
+          isEarly: timeInMinutes < earlyStart
         };
+        console.log(`Early goal check: ${earlyStart}(6am) <= ${timeInMinutes} < ${earlyEnd}(8am), result=${result.isWithinGoal}`);
         break;
       case 'mid':
+        // 8am-10am
+        const midStart = 8 * 60;   // 8:00 AM in minutes
+        const midEnd = 10 * 60;    // 10:00 AM in minutes
         result = {
-          isWithinGoal: timeInMinutes >= 8 * 60 && timeInMinutes < 10 * 60,
-          isEarly: timeInMinutes < 8 * 60
+          isWithinGoal: timeInMinutes >= midStart && timeInMinutes < midEnd,
+          isEarly: timeInMinutes < midStart
         };
+        console.log(`Mid goal check: ${midStart}(8am) <= ${timeInMinutes} < ${midEnd}(10am), result=${result.isWithinGoal}`);
         break;
       case 'late':
+        // 10am-12pm
+        const lateStart = 10 * 60;  // 10:00 AM in minutes
+        const lateEnd = 12 * 60;    // 12:00 PM in minutes
         result = {
-          isWithinGoal: timeInMinutes >= 10 * 60 && timeInMinutes < 12 * 60,
-          isEarly: timeInMinutes < 10 * 60
+          isWithinGoal: timeInMinutes >= lateStart && timeInMinutes < lateEnd,
+          isEarly: timeInMinutes < lateStart
         };
+        console.log(`Late goal check: ${lateStart}(10am) <= ${timeInMinutes} < ${lateEnd}(12pm), result=${result.isWithinGoal}`);
         break;
       default:
+        console.log('Unknown goal type:', goalType);
         result = { isWithinGoal: false, isEarly: false };
     }
     
@@ -814,6 +857,8 @@ const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {__DEV__ && <DevTesting visible={showDevMenu} onClose={() => setShowDevMenu(false)} />}
+      
       <ScrollView 
         style={styles.content}
         showsVerticalScrollIndicator={false}
@@ -841,6 +886,8 @@ const HomeScreen = () => {
               <TouchableOpacity 
                 style={styles.avatarContainer}
                 onPress={() => navigation.navigate('Profile' as any)}
+                onLongPress={handleDevMenuToggle}
+                delayLongPress={500}
               >
                 <Image 
                   source={{ uri: avatarUrl }}
@@ -861,6 +908,9 @@ const HomeScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={debugGoalValues} style={styles.debugButton}>
                   <Text style={styles.debugButtonText}>Debug Goals</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDevMenuToggle} style={styles.debugButton}>
+                  <Text style={styles.debugButtonText}>Test Menu</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -893,18 +943,6 @@ const HomeScreen = () => {
                   <View style={styles.statusTitleContainer}>
                     <Text style={styles.statusTitle}>Bed Made</Text>
                     <View style={styles.badgeContainer}>
-                      {isEarlyCompletion && (
-                        <View style={[styles.statusBadge, styles.earlyBadge]}>
-                          <MaterialIcons name="star" size={10} color="white" />
-                          <Text style={styles.badgeText}>Superstar!</Text>
-                        </View>
-                      )}
-                      {isWithinGoal && !isEarlyCompletion && (
-                        <View style={[styles.statusBadge, styles.goalBadge]}>
-                          <MaterialIcons name="check" size={10} color="white" />
-                          <Text style={styles.badgeText}>Goal Achieved</Text>
-                        </View>
-                      )}
                       {verificationTime && (
                         <View style={[
                           styles.verifiedAtContainer,
@@ -930,6 +968,20 @@ const HomeScreen = () => {
                     </View>
                   </View>
                   
+                  {isEarlyCompletion && (
+                    <View style={styles.earlyCompletionBadge}>
+                      <MaterialIcons name="star" size={14} color="#FFFFFF" />
+                      <Text style={styles.earlyCompletionBadgeText}>Superstar!</Text>
+                    </View>
+                  )}
+                  
+                  {isWithinGoal && !isEarlyCompletion && (
+                    <View style={styles.goalAchievedBadge}>
+                      <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
+                      <Text style={styles.goalAchievedBadgeText}>Goal Achieved</Text>
+                    </View>
+                  )}
+                  
                   {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
                     <View style={styles.missedGoalBadge}>
                       <MaterialIcons name="warning" size={14} color="#FF3B30" />
@@ -946,6 +998,55 @@ const HomeScreen = () => {
                         ? `Great job hitting your ${DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange || 'morning'} goal!`
                         : "Better late than never! Your bed is made and that's what matters most."}
                   </Text>
+                  
+                  {/* Add debug info in dev mode */}
+                  {__DEV__ && (
+                    <View style={{marginVertical: 8, backgroundColor: '#f0f0f0', padding: 8, borderRadius: 4}}>
+                      <Text style={{fontSize: 12, color: '#666'}}>
+                        Debug: goalType={dailyGoal}, isWithinGoal={isWithinGoal ? 'true' : 'false'}, 
+                        isEarlyCompletion={isEarlyCompletion ? 'true' : 'false'}, 
+                        verificationTime={verificationTime}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Add congratulatory animation or badge for goal achievement */}
+                  {isWithinGoal && !isEarlyCompletion && (
+                    <Surface style={styles.achievementCard}>
+                      <View style={styles.achievementContent}>
+                        <View style={styles.achievementHeader}>
+                          <View style={styles.achievementIconContainer}>
+                            <MaterialIcons name="emoji-events" size={24} color="#FFD700" />
+                          </View>
+                          <View style={styles.achievementTextContainer}>
+                            <Text style={styles.achievementTitle}>Daily Goal Completed!</Text>
+                            <Text style={styles.achievementSubtitle}>
+                              Making your bed during your goal time helps build a consistent routine.
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </Surface>
+                  )}
+                  
+                  {/* Add special content for early completion */}
+                  {isEarlyCompletion && (
+                    <Surface style={styles.earlyAchievementCard}>
+                      <View style={styles.achievementContent}>
+                        <View style={styles.achievementHeader}>
+                          <View style={styles.earlyAchievementIconContainer}>
+                            <MaterialIcons name="star" size={24} color="#FFFFFF" />
+                          </View>
+                          <View style={styles.achievementTextContainer}>
+                            <Text style={styles.earlyAchievementTitle}>Early Bird Bonus!</Text>
+                            <Text style={styles.earlyAchievementSubtitle}>
+                              You're off to an amazing start today. Keep up the momentum!
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </Surface>
+                  )}
                 </View>
                 
                 {/* Morning Goal Tip Section - Only show when bed is made but goal is missed */}
@@ -1779,6 +1880,114 @@ const styles = StyleSheet.create({
   },
   lateVerifiedText: {
     color: '#6E6E73',
+  },
+  earlyCompletionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#5856D6',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  earlyCompletionBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  goalAchievedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#34C759',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  goalAchievedBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 4,
+    letterSpacing: -0.2,
+  },
+  achievementCard: {
+    marginTop: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700',
+  },
+  achievementContent: {
+    flex: 1,
+  },
+  achievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  achievementIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF9E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  achievementTextContainer: {
+    flex: 1,
+  },
+  achievementTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  achievementSubtitle: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 19,
+  },
+  earlyAchievementCard: {
+    marginTop: 16,
+    borderRadius: 16,
+    backgroundColor: '#F2EFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#5856D6',
+  },
+  earlyAchievementIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#5856D6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  earlyAchievementTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1D1D1F',
+    marginBottom: 4,
+  },
+  earlyAchievementSubtitle: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 19,
   },
 });
 
