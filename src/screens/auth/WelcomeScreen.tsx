@@ -27,22 +27,21 @@ const WelcomeScreen = () => {
     navigation.navigate('SignIn');
   };
 
-  // Steps for how it works section
   const steps = [
     {
       icon: 'photo-camera' as const,
-      title: 'Take a quick photo',
-      description: 'Snap a picture of your made bed to verify your daily habit'
+      title: 'Quick Photo Verification',
+      description: 'Snap a picture of your made bed to build your daily habit'
     },
     {
       icon: 'local-fire-department' as const,
-      title: 'Build your streak',
-      description: 'Maintain your streak by making your bed every day'
+      title: 'Build Your Streak',
+      description: 'Stay motivated with daily streaks and achievements'
     },
     {
       icon: 'insights' as const,
-      title: 'Track your progress',
-      description: 'View detailed statistics and see your improvement over time'
+      title: 'Track Your Progress',
+      description: 'Watch your progress and see your improvement over time'
     }
   ];
 
@@ -54,17 +53,19 @@ const WelcomeScreen = () => {
         {/* Logo and Title */}
         <View style={styles.headerContainer}>
           <Surface style={styles.logoSurface}>
-            <Text style={styles.logoText}>BM</Text>
+            <MaterialIcons name="bed" size={32} color="white" />
           </Surface>
           <Text style={styles.title}>BedMade</Text>
-          <Text style={styles.subtitle}>Start your journey to better mornings</Text>
+          <Text style={styles.subtitle}>
+            Start your journey to better{'\n'}mornings and greater wellbeing
+          </Text>
         </View>
         
         {/* Feature Cards */}
         <View style={styles.featuresContainer}>
           {steps.map((step, index) => (
             <Surface key={index} style={styles.featureCard}>
-              <View style={styles.featureIconContainer}>
+              <View style={[styles.featureIconContainer, { backgroundColor: index === 0 ? colors.primary : index === 1 ? colors.secondary : colors.accent }]}>
                 <MaterialIcons name={step.icon} size={24} color="white" />
               </View>
               <View style={styles.featureContent}>
@@ -74,27 +75,18 @@ const WelcomeScreen = () => {
             </Surface>
           ))}
         </View>
-        
-        {/* Value Proposition */}
-        <View style={styles.valueContainer}>
-          <Text style={styles.valueText}>
-            A simple habit that leads to better productivity, positivity, and peace of mind.
-          </Text>
-        </View>
       </View>
       
       <View style={styles.bottomContainer}>
-        {/* Get Started Button */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleGetStarted}>
-            <Text style={styles.primaryButtonText}>Get Started</Text>
-            <MaterialIcons name="arrow-forward" size={20} color="white" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleGetStarted}>
+          <Text style={styles.primaryButtonText}>Get Started</Text>
+          <MaterialIcons name="arrow-forward" size={20} color="white" />
+        </TouchableOpacity>
         
-        {/* Sign In Link - Fixed at bottom */}
         <TouchableOpacity style={styles.signInContainer} onPress={handleSignIn}>
-          <Text style={styles.signInText}>Already have an account? <Text style={styles.signInLink}>Sign In</Text></Text>
+          <Text style={styles.signInText}>
+            Already have an account? <Text style={styles.signInLink}>Sign In</Text>
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -111,65 +103,61 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: height * 0.04,
   },
   bottomContainer: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingBottom: 32,
+    paddingTop: 16,
   },
   headerContainer: {
     alignItems: 'center',
-    marginTop: height * 0.05,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   logoSurface: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 18,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  featuresContainer: {
+    marginTop: 24,
+    flex: 1,
+  },
+  featureCard: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    marginBottom: 10,
+    overflow: 'hidden',
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    marginBottom: 16,
-  },
-  logoText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text.primary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  featuresContainer: {
-    marginBottom: 24,
-  },
-  featureCard: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    backgroundColor: 'white',
   },
   featureIconContainer: {
-    backgroundColor: colors.primary,
     padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -178,53 +166,33 @@ const styles = StyleSheet.create({
   featureContent: {
     flex: 1,
     padding: 16,
-    backgroundColor: 'white',
+    justifyContent: 'center',
   },
   featureTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '600',
     color: colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   featureDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.text.secondary,
-    lineHeight: 20,
-  },
-  valueContainer: {
-    marginBottom: 24,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  valueText: {
-    fontSize: 16,
-    color: colors.text.primary,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontWeight: '500',
-  },
-  buttonContainer: {
-    marginBottom: 16,
+    lineHeight: 22,
   },
   primaryButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    elevation: 4,
+    elevation: 8,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 12,
+    marginBottom: 16,
   },
   primaryButtonText: {
     color: 'white',
@@ -234,8 +202,7 @@ const styles = StyleSheet.create({
   },
   signInContainer: {
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 8,
+    paddingVertical: 8,
   },
   signInText: {
     fontSize: 16,
