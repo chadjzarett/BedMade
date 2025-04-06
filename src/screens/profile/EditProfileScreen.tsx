@@ -100,12 +100,53 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     try {
       setUploadingImage(true);
       
-      // Store the image URI locally
-      await AsyncStorage.setItem('localProfilePicture', uri);
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to upload a profile picture.');
+        return;
+      }
+      
+      // Convert image to blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      // Upload to Supabase Storage
+      const fileName = `profile-${user.id}-${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('profile-pictures')
+        .upload(fileName, blob);
+      
+      if (error) {
+        console.error('Error uploading image:', error);
+        Alert.alert('Error', 'Failed to upload image. Please try again.');
+        return;
+      }
+      
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-pictures')
+        .getPublicUrl(fileName);
+      
+      // Update user profile with the new image URL
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ profile_picture: publicUrl })
+        .eq('id', user.id);
+      
+      if (updateError) {
+        console.error('Error updating profile:', updateError);
+        Alert.alert('Error', 'Failed to update profile. Please try again.');
+        return;
+      }
+      
+      // Store the public URL locally
+      await AsyncStorage.setItem('localProfilePicture', publicUrl);
       
       // Update the UI
-      setUserData(prev => ({ ...prev, profilePicture: uri }));
-      setFormData(prev => ({ ...prev, profilePicture: uri }));
+      setUserData(prev => ({ ...prev, profilePicture: publicUrl }));
+      setFormData(prev => ({ ...prev, profilePicture: publicUrl }));
       
       Alert.alert('Success', 'Profile picture updated successfully!');
     } catch (error) {

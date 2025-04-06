@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform, Linking, TextInput, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,6 +8,11 @@ import { resetStreakCount, clearDailyRecords, getUserProfile, getStreakValues } 
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { Switch } from 'react-native-paper';
+import { scheduleAllBedMakingReminders, cancelAllNotifications, getNotificationPreferences, saveNotificationPreferences } from '../../utils/notificationScheduler';
+import { List, Surface } from 'react-native-paper';
+import { StackNavigationProp } from '@react-navigation/stack';
 
 // Define daily goal time options
 const DAILY_GOAL_OPTIONS = [
@@ -42,181 +47,111 @@ interface UserData {
   lastVerificationDate: string | null;
   profilePicture: string | null;
   dailyGoal: string | null;
+  notificationsEnabled: boolean;
+  notificationPreferences: {
+    beforeGoal: boolean;
+    atGoal: boolean;
+    afterGoal: boolean;
+  };
 }
 
-interface ProfileScreenProps {
-  navigation: any;
-}
+type RootStackParamList = {
+  Profile: undefined;
+  EditProfile: undefined;
+};
 
-interface ProfileScreenState {
-  loading: boolean;
-  userData: UserData;
-  uploadingImage: boolean;
-}
+type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
-class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenState> {
-  private _unsubscribe?: () => void;
-
-  constructor(props: ProfileScreenProps) {
-    super(props);
-    this.state = {
-      loading: true,
-      uploadingImage: false,
-      userData: {
-        email: '',
-        username: '',
-        currentStreak: 0,
-        bestStreak: 0,
-        lastVerificationDate: null,
-        profilePicture: null,
-        dailyGoal: null,
-      }
-    };
-  }
-
-  componentDidMount() {
-    this.loadUserData();
-    // Add focus listener to reload data when screen comes into focus
-    this._unsubscribe = this.props.navigation.addListener('focus', () => {
-      this.loadUserData();
-    });
-  }
-
-  componentWillUnmount() {
-    if (this._unsubscribe) {
-      this._unsubscribe();
+const ProfileScreen = () => {
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const [loading, setLoading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+  const [userData, setUserData] = useState<UserData>({
+    email: '',
+    username: '',
+    currentStreak: 0,
+    bestStreak: 0,
+    lastVerificationDate: null,
+    profilePicture: null,
+    dailyGoal: 'early',
+    notificationsEnabled: false,
+    notificationPreferences: {
+      beforeGoal: true,
+      atGoal: true,
+      afterGoal: true
     }
-  }
+  });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Add refs for tap counting
+  const profileTapCountRef = React.useRef(0);
+  const profileTapTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Load user data from Supabase
-  loadUserData = async () => {
+  // Load user data function
+  const loadUserData = async () => {
     try {
-      this.setState({ loading: true });
-      
-      console.log('Loading user profile data...');
-      
-      const profileResult = await getUserProfile();
-      const profile = profileResult.profile;
-      
-      if (profileResult.message) {
-        console.log('Profile message:', profileResult.message);
-      }
-      
-      if (!profile) {
-        console.error('No profile data available');
-        this.setState({ loading: false });
-        return;
-      }
-      
-      console.log('Using profile data:', profile);
-      
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        console.error('No authenticated user found');
-        this.setState({ loading: false });
-        return;
-      }
-
-      // Load locally stored profile picture
-      const localProfilePicture = await AsyncStorage.getItem('localProfilePicture');
-      
-      // First try to get the daily goal from AsyncStorage (prioritize this)
-      let finalGoal: string | null = null;
-      
-      try {
-        const storedDailyGoal = await AsyncStorage.getItem('userDailyGoal');
-        console.log('AsyncStorage daily goal:', storedDailyGoal);
+      if (user) {
+        // Use getUserProfile to get complete profile data
+        const profileResult = await getUserProfile();
+        const profile = profileResult.profile;
         
-        if (storedDailyGoal && ['early', 'mid', 'late'].includes(storedDailyGoal)) {
-          console.log('Using AsyncStorage daily goal:', storedDailyGoal);
-          finalGoal = storedDailyGoal;
+        if (profile) {
+          // Load locally stored profile picture
+          const localProfilePicture = await AsyncStorage.getItem('localProfilePicture');
           
-          // If database value doesn't match AsyncStorage, update the database
-          if (profile.daily_goal !== finalGoal) {
-            console.log('Syncing AsyncStorage goal to database. AsyncStorage:', finalGoal, 'Database:', profile.daily_goal);
-            
-            const { error: updateError } = await supabase
-              .from('user_profiles')
-              .update({ daily_goal: finalGoal })
-              .eq('id', user.id);
-              
-            if (updateError) {
-              console.error('Error syncing daily goal to database:', updateError);
-            } else {
-              console.log('Successfully synced AsyncStorage daily goal to database');
-            }
-          }
-        }
-      } catch (storageError) {
-        console.error('Error reading daily goal from AsyncStorage:', storageError);
-      }
-      
-      // If AsyncStorage doesn't have a valid value, try the database
-      if (!finalGoal) {
-        let dbGoal = profile.daily_goal;
-        console.log('Database daily goal:', dbGoal);
-        
-        // If database value is 'morning', normalize it to 'early'
-        if (dbGoal === 'morning') {
-          dbGoal = 'early';
-        }
-        
-        if (dbGoal && ['early', 'mid', 'late'].includes(dbGoal)) {
-          console.log('Using database daily goal:', dbGoal);
-          finalGoal = dbGoal;
-          
-          // Sync to AsyncStorage
-          try {
-            await AsyncStorage.setItem('userDailyGoal', dbGoal);
-            console.log('Synced database goal to AsyncStorage');
-          } catch (error) {
-            console.error('Error syncing goal to AsyncStorage:', error);
-          }
+          setUserData(prevData => ({
+            ...prevData,
+            email: user.email || '',
+            username: profile.display_name || user.email?.split('@')[0] || 'User',
+            profilePicture: localProfilePicture || profile.profile_picture || null,
+            dailyGoal: profile.daily_goal,
+            currentStreak: profile.current_streak || 0,
+            bestStreak: profile.longest_streak || 0,
+            lastVerificationDate: profile.last_made_date || null,
+          }));
         }
       }
-      
-      // Only default to 'early' if we have no valid value from either source
-      if (!finalGoal || !['early', 'mid', 'late'].includes(finalGoal)) {
-        console.log('No valid daily goal found, defaulting to early');
-        finalGoal = 'early';
-        
-        // Save the default to both storage locations
-        try {
-          await AsyncStorage.setItem('userDailyGoal', 'early');
-          await supabase
-            .from('user_profiles')
-            .update({ daily_goal: 'early' })
-            .eq('id', user.id);
-        } catch (error) {
-          console.error('Error saving default goal:', error);
-        }
-      }
-      
-      console.log('Final daily goal value:', finalGoal);
-      
-      this.setState({
-        userData: {
-          email: user?.email || '',
-          username: profile.display_name || user?.email?.split('@')[0] || 'User',
-          currentStreak: profile.current_streak || 0,
-          bestStreak: profile.longest_streak || 0,
-          lastVerificationDate: profile.last_made_date || null,
-          profilePicture: localProfilePicture || null,
-          dailyGoal: finalGoal,
-        }
-      });
-      
-      console.log('Updated state with profile data:', { dailyGoal: finalGoal });
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
-      this.setState({ loading: false });
+      setLoading(false);
     }
   };
 
+  // Load data on mount and focus
+  useEffect(() => {
+    loadUserData();
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserData();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // Load debug menu state on mount
+  useEffect(() => {
+    const loadDebugMenuState = async () => {
+      try {
+        const savedState = await AsyncStorage.getItem('debugMenuEnabled');
+        if (savedState !== null) {
+          setShowDevMenu(savedState === 'true');
+        }
+      } catch (error) {
+        console.error('Error loading debug menu state:', error);
+      }
+    };
+
+    if (__DEV__) {
+      loadDebugMenuState();
+    }
+  }, []);
+
   // Pick an image from the gallery
-  pickImage = async () => {
+  const pickImage = async () => {
     try {
       // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -250,7 +185,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        await this.uploadProfilePicture(result.assets[0].uri);
+        await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -259,9 +194,9 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Upload profile picture to Supabase storage
-  uploadProfilePicture = async (uri: string) => {
+  const uploadProfilePicture = async (uri: string) => {
     try {
-      this.setState({ uploadingImage: true });
+      setUploadingImage(true);
       
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -304,12 +239,13 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
         return;
       }
       
+      // Save to AsyncStorage for local access
+      await AsyncStorage.setItem('localProfilePicture', publicUrl);
+      
       // Update local state
-      this.setState(prevState => ({
-        userData: {
-          ...prevState.userData,
-          profilePicture: publicUrl
-        }
+      setUserData(prevUserData => ({
+        ...prevUserData,
+        profilePicture: publicUrl
       }));
       
       Alert.alert('Success', 'Profile picture updated successfully!');
@@ -317,100 +253,42 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
       console.error('Error in uploadProfilePicture:', error);
       Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
     } finally {
-      this.setState({ uploadingImage: false });
+      setUploadingImage(false);
     }
   };
 
   // Set daily goal
-  setDailyGoal = async (goalId: string) => {
+  const handleDailyGoalChange = async (goalId: string) => {
     try {
-      // Get the current user
+      await AsyncStorage.setItem('userDailyGoal', goalId);
+      
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to set a daily goal.');
-        return;
-      }
-      
-      console.log('Setting daily goal to:', goalId);
-      
-      // Validate the goal ID
-      if (!['early', 'mid', 'late'].includes(goalId)) {
-        console.error('Invalid goal ID:', goalId);
-        return;
-      }
-      
-      // First update AsyncStorage for immediate feedback
-      try {
-        await AsyncStorage.setItem('userDailyGoal', goalId);
-        console.log('Daily goal saved to AsyncStorage:', goalId);
-      } catch (storageError) {
-        console.error('Error saving daily goal to AsyncStorage:', storageError);
-      }
-      
-      // Update local state for immediate UI feedback
-      this.setState(prevState => ({
-        userData: {
-          ...prevState.userData,
-          dailyGoal: goalId
-        }
-      }), () => {
-        console.log('Updated state with new daily goal:', goalId);
-      });
-      
-      // Then update the database
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ daily_goal: goalId })
-        .eq('id', user.id);
-      
-      if (error) {
-        console.error('Error updating daily goal in database:', error);
-        Alert.alert('Error', 'Failed to update daily goal. Please try again.');
-        
-        // Revert AsyncStorage and state if database update fails
-        try {
-          const previousGoal = this.state.userData.dailyGoal || 'early';
-          console.log('Reverting to previous goal:', previousGoal);
-          await AsyncStorage.setItem('userDailyGoal', previousGoal);
-          this.setState(prevState => ({
-            userData: {
-              ...prevState.userData,
-              dailyGoal: previousGoal
-            }
-          }));
-        } catch (revertError) {
-          console.error('Error reverting daily goal:', revertError);
-        }
-        return;
-      }
-      
-      console.log('Daily goal updated successfully in all storage locations:', goalId);
-      
-      // Verify the update was successful
-      try {
-        const storedGoal = await AsyncStorage.getItem('userDailyGoal');
-        console.log('Verification - AsyncStorage goal after update:', storedGoal);
-        
-        const { data: profile } = await supabase
+      if (user) {
+        await supabase
           .from('user_profiles')
-          .select('daily_goal')
-          .eq('id', user.id)
-          .single();
-          
-        console.log('Verification - Database goal after update:', profile?.daily_goal);
-      } catch (verifyError) {
-        console.error('Error verifying goal update:', verifyError);
+          .update({ daily_goal: goalId })
+          .eq('id', user.id);
       }
       
+      setUserData(prevData => ({
+        ...prevData,
+        dailyGoal: goalId
+      }));
+
+      // Only schedule notifications in production builds unless explicitly testing
+      if (!__DEV__ && userData.notificationsEnabled) {
+        const goalTime = goalId === 'early' ? '07:00' : 
+                        goalId === 'mid' ? '09:00' : '11:00';
+        await scheduleAllBedMakingReminders(goalTime);
+      }
     } catch (error) {
-      console.error('Error setting daily goal:', error);
-      Alert.alert('Error', 'Failed to set daily goal. Please try again.');
+      console.error('Error updating daily goal:', error);
+      Alert.alert('Error', 'Failed to update daily goal. Please try again.');
     }
   };
 
   // Format the last verification date
-  formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
     
     const date = new Date(dateString);
@@ -422,10 +300,10 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Calculate days since last verification
-  getDaysSinceLastVerification = () => {
-    if (!this.state.userData.lastVerificationDate) return 'N/A';
+  const getDaysSinceLastVerification = () => {
+    if (!userData.lastVerificationDate) return 'N/A';
     
-    const lastDate = new Date(this.state.userData.lastVerificationDate);
+    const lastDate = new Date(userData.lastVerificationDate);
     const today = new Date();
     
     // Reset hours to compare just the dates
@@ -439,7 +317,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Sign out the user
-  handleSignOut = async () => {
+  const handleSignOut = async () => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -462,7 +340,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Reset streak count for testing
-  handleResetStreak = async () => {
+  const handleResetStreak = async () => {
     Alert.alert(
       'Reset Streak',
       'Are you sure you want to reset your streak count to 1? This is for testing purposes only.',
@@ -476,7 +354,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
               const result = await resetStreakCount();
               if (result.success) {
                 Alert.alert('Success', 'Streak count reset to 1');
-                this.loadUserData(); // Reload user data to update the UI
+                loadUserData(); // Reload user data to update the UI
               } else {
                 Alert.alert('Error', result.error || 'Failed to reset streak count');
               }
@@ -491,7 +369,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Check streak values for debugging
-  handleCheckStreakValues = async () => {
+  const handleCheckStreakValues = async () => {
     try {
       const result = await getStreakValues();
       if (result.success) {
@@ -509,7 +387,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Clear all daily records for testing
-  handleClearDailyRecords = async () => {
+  const handleClearDailyRecords = async () => {
     Alert.alert(
       'Clear All Records',
       'Are you sure you want to clear all your daily records? This will reset your streak and all verification history. This is for testing purposes only.',
@@ -523,7 +401,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
               const result = await clearDailyRecords();
               if (result.success) {
                 Alert.alert('Success', 'All daily records cleared');
-                this.loadUserData(); // Reload user data to update the UI
+                loadUserData(); // Reload user data to update the UI
               } else {
                 Alert.alert('Error', result.error || 'Failed to clear daily records');
               }
@@ -538,10 +416,10 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
 
   // Debug function to check goal values
-  debugGoalValues = async () => {
+  const debugGoalValues = async () => {
     try {
       console.log('=== DEBUG GOAL VALUES (ProfileScreen) ===');
-      console.log('Current state dailyGoal:', this.state.userData.dailyGoal);
+      console.log('Current state dailyGoal:', userData.dailyGoal);
       
       // Check AsyncStorage
       const asyncGoal = await AsyncStorage.getItem('userDailyGoal');
@@ -568,7 +446,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
       // Show alert with the values
       Alert.alert(
         'Daily Goal Values',
-        `State: ${this.state.userData.dailyGoal}\nAsyncStorage: ${asyncGoal}\nDatabase: ${await this.getDatabaseGoal()}`,
+        `State: ${userData.dailyGoal}\nAsyncStorage: ${asyncGoal}\nDatabase: ${await getDatabaseGoal()}`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -577,7 +455,7 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
   };
   
   // Helper to get database goal
-  getDatabaseGoal = async (): Promise<string> => {
+  const getDatabaseGoal = async (): Promise<string> => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -599,160 +477,402 @@ class ProfileScreen extends React.Component<ProfileScreenProps, ProfileScreenSta
     }
   };
 
-  handleEditProfile = () => {
-    this.props.navigation.navigate('EditProfile');
+  const handleEditProfile = () => {
+    navigation.navigate('EditProfile');
   };
 
-  render() {
-    const { loading, userData, uploadingImage } = this.state;
+  const toggleNotifications = async (value: boolean) => {
+    try {
+      if (value) {
+        // Request permission when enabling
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Required',
+            'Please enable notifications in your device settings to receive BedMade reminders.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Open Settings',
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
 
-    if (loading) {
-      return (
-        <View style={[styles.container, styles.loadingContainer]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      );
+        // Schedule notifications based on current goal time
+        const goalTime = userData.dailyGoal === 'early' ? '07:00' : 
+                        userData.dailyGoal === 'mid' ? '09:00' : '11:00';
+        await scheduleAllBedMakingReminders(goalTime);
+      } else {
+        // Cancel all scheduled notifications when disabling
+        await cancelAllNotifications();
+      }
+
+      // Save setting to AsyncStorage
+      await AsyncStorage.setItem('notificationsEnabled', value.toString());
+      
+      // Update user profile in database
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('user_profiles')
+          .update({ notifications_enabled: value })
+          .eq('id', user.id);
+      }
+
+      setUserData(prevUserData => ({
+        ...prevUserData,
+        notificationsEnabled: value
+      }));
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Error', 'Failed to update notification settings');
     }
+  };
 
+  const toggleNotificationPreference = async (preference: keyof typeof userData.notificationPreferences) => {
+    try {
+      const newPreferences = {
+        ...userData.notificationPreferences,
+        [preference]: !userData.notificationPreferences[preference]
+      };
+
+      // Save preferences
+      await saveNotificationPreferences(newPreferences);
+
+      // Update state
+      setUserData(prevUserData => ({
+        ...prevUserData,
+        notificationPreferences: newPreferences
+      }));
+
+      // Reschedule notifications if they are enabled
+      if (userData.notificationsEnabled) {
+        const goalTime = userData.dailyGoal === 'early' ? '07:00' : 
+                        userData.dailyGoal === 'mid' ? '09:00' : '11:00';
+        await scheduleAllBedMakingReminders(goalTime);
+      }
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      Alert.alert('Error', 'Failed to update notification preferences');
+    }
+  };
+
+  const handleProfilePictureTap = () => {
+    profileTapCountRef.current++;
+    console.log(`Profile picture tapped: ${profileTapCountRef.current} times`);
+    
+    // Clear any existing timeout
+    if (profileTapTimeoutRef.current) {
+      clearTimeout(profileTapTimeoutRef.current);
+    }
+    
+    // Set a new timeout to reset the tap count after 3 seconds
+    profileTapTimeoutRef.current = setTimeout(() => {
+      console.log('Tap count reset due to timeout');
+      profileTapCountRef.current = 0;
+    }, 3000);
+    
+    // If tapped 5 times, toggle debug menu
+    if (profileTapCountRef.current >= 5) {
+      console.log('5 taps detected, toggling debug menu');
+      toggleDebugMenu();
+      profileTapCountRef.current = 0;
+    }
+  };
+
+  const toggleDebugMenu = async () => {
+    const newDebugMenuState = !showDevMenu;
+    console.log(`Toggling debug menu: ${showDevMenu} -> ${newDebugMenuState}`);
+    
+    try {
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('debugMenuEnabled', newDebugMenuState.toString());
+      
+      // Update state and force a re-render
+      setShowDevMenu(newDebugMenuState);
+      
+      // Show feedback
+      Alert.alert(
+        newDebugMenuState ? 'Debug Menu Enabled' : 'Debug Menu Disabled',
+        newDebugMenuState 
+          ? 'Developer options are now available in the Account section.' 
+          : 'Developer options have been hidden.'
+      );
+    } catch (error) {
+      console.error('Error toggling debug menu:', error);
+    }
+  };
+
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Your Profile</Text>
-        </View>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* User Info Section */}
-          <View style={styles.userCard}>
-            <View style={styles.userInfoContainer}>
-              <View style={styles.avatarSection}>
-                <View style={styles.avatarContainer}>
-                  {userData.profilePicture ? (
-                    <Image 
-                      source={{ uri: userData.profilePicture }} 
-                      style={styles.avatarImage} 
-                    />
-                  ) : (
-                    <Text style={styles.avatarText}>
-                      {userData.username.charAt(0).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={this.handleEditProfile}
-                >
-                  <MaterialIcons name="edit" size={18} color={colors.text.secondary} />
-                </TouchableOpacity>
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Your Profile</Text>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* User Info Section */}
+        <View style={styles.userCard}>
+          <View style={styles.userInfoContainer}>
+            <View style={styles.avatarSection}>
+              <TouchableOpacity 
+                style={styles.avatarContainer}
+                onPress={handleProfilePictureTap}
+              >
+                {userData.profilePicture ? (
+                  <Image 
+                    source={{ uri: userData.profilePicture }} 
+                    style={styles.avatarImage} 
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {userData.username.charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={handleEditProfile}
+              >
+                <MaterialIcons name="edit" size={18} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.userDetails}>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.userLabel}>Username:</Text>
+                <Text style={styles.userText} numberOfLines={1}>{userData.username}</Text>
               </View>
-              <View style={styles.userDetails}>
-                <View style={styles.userDetailRow}>
-                  <Text style={styles.userLabel}>Username:</Text>
-                  <Text style={styles.userText} numberOfLines={1}>{userData.username}</Text>
-                </View>
-                <View style={styles.userDetailRow}>
-                  <Text style={styles.userLabel}>Email:</Text>
-                  <Text style={styles.userText} numberOfLines={1}>{userData.email}</Text>
-                </View>
+              <View style={styles.userDetailRow}>
+                <Text style={styles.userLabel}>Email:</Text>
+                <Text style={styles.userText} numberOfLines={1}>{userData.email}</Text>
               </View>
             </View>
           </View>
+        </View>
 
-          {/* Section Header */}
-          <Text style={styles.sectionHeader}>DAILY GOAL</Text>
+        {/* Section Header */}
+        <Text style={styles.sectionHeader}>DAILY GOAL</Text>
+        
+        {/* Daily Goal Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionDescription}>
+            Set your preferred time to make your bed each day
+          </Text>
           
-          {/* Daily Goal Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionDescription}>
-              Set your preferred time to make your bed each day
-            </Text>
-            
-            {DAILY_GOAL_OPTIONS.map(option => {
-              const isSelected = userData.dailyGoal === option.id;
-              console.log(`Option ${option.id}: isSelected=${isSelected}, userData.dailyGoal=${userData.dailyGoal}`);
-              return (
-                <TouchableOpacity 
-                  key={option.id}
-                  style={[
-                    styles.goalOption,
-                    isSelected && styles.selectedGoalOption
-                  ]}
-                  onPress={() => this.setDailyGoal(option.id)}
-                >
-                  <View style={[styles.goalIconContainer, { backgroundColor: option.color }]}>
-                    <MaterialIcons name={option.icon} size={24} color="white" />
+          {DAILY_GOAL_OPTIONS.map(option => {
+            const isSelected = userData.dailyGoal === option.id;
+            console.log(`Option ${option.id}: isSelected=${isSelected}, userData.dailyGoal=${userData.dailyGoal}`);
+            return (
+              <TouchableOpacity 
+                key={option.id}
+                style={[
+                  styles.goalOption,
+                  isSelected && styles.selectedGoalOption
+                ]}
+                onPress={() => handleDailyGoalChange(option.id)}
+              >
+                <View style={[styles.goalIconContainer, { backgroundColor: option.color }]}>
+                  <MaterialIcons name={option.icon} size={24} color="white" />
+                </View>
+                <View style={styles.goalTextContainer}>
+                  <Text style={styles.goalText}>{option.label}</Text>
+                  <Text style={styles.goalDescription}>{option.description}</Text>
+                </View>
+                {isSelected && (
+                  <View style={styles.checkContainer}>
+                    <MaterialIcons name="check" size={18} color="#FFFFFF" style={styles.checkIcon} />
                   </View>
-                  <View style={styles.goalTextContainer}>
-                    <Text style={styles.goalText}>{option.label}</Text>
-                    <Text style={styles.goalDescription}>{option.description}</Text>
-                  </View>
-                  {isSelected && (
-                    <View style={styles.checkContainer}>
-                      <MaterialIcons name="check" size={18} color="#FFFFFF" style={styles.checkIcon} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Section Header */}
+        <Text style={styles.sectionHeader}>NOTIFICATIONS</Text>
+        
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons 
+                name="notifications" 
+                size={24} 
+                color={colors.text.primary} 
+                style={styles.menuIcon} 
+              />
+              <Text style={styles.menuItemText}>Enable Notifications</Text>
+            </View>
+            <Switch
+              value={userData.notificationsEnabled}
+              onValueChange={toggleNotifications}
+              color={colors.primary}
+            />
           </View>
 
-          {/* Section Header */}
-          <Text style={styles.sectionHeader}>ACCOUNT</Text>
-          
-          {/* Account Section */}
-          <View style={styles.section}>
-            <TouchableOpacity style={styles.menuItem} onPress={this.handleSignOut}>
-              <View style={styles.menuItemLeft}>
-                <MaterialIcons name="logout" size={24} color={colors.error} style={styles.menuIcon} />
-                <Text style={[styles.menuItemText, { color: colors.error }]}>Sign Out</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={this.handleResetStreak}>
-              <View style={styles.menuItemLeft}>
-                <MaterialIcons name="refresh" size={24} color={colors.text.primary} style={styles.menuIcon} />
-                <Text style={styles.menuItemText}>Reset Streak</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={this.handleCheckStreakValues}>
-              <View style={styles.menuItemLeft}>
-                <MaterialIcons name="analytics" size={24} color={colors.text.primary} style={styles.menuIcon} />
-                <Text style={styles.menuItemText}>Check Streak Values</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={this.handleClearDailyRecords}>
-              <View style={styles.menuItemLeft}>
-                <MaterialIcons name="delete" size={24} color={colors.text.primary} style={styles.menuIcon} />
-                <Text style={styles.menuItemText}>Clear Daily Records</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
-            </TouchableOpacity>
-            
-            {__DEV__ && (
-              <TouchableOpacity style={styles.menuItem} onPress={this.debugGoalValues}>
+          {userData.notificationsEnabled && (
+            <>
+              <View style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
-                  <MaterialIcons name="bug-report" size={24} color={colors.text.primary} style={styles.menuIcon} />
-                  <Text style={styles.menuItemText}>Debug Goal Values</Text>
+                  <MaterialIcons 
+                    name="alarm" 
+                    size={24} 
+                    color={colors.text.primary} 
+                    style={styles.menuIcon} 
+                  />
+                  <Text style={styles.menuItemText}>Reminder Before Goal Time</Text>
+                </View>
+                <Switch
+                  value={userData.notificationPreferences.beforeGoal}
+                  onValueChange={() => toggleNotificationPreference('beforeGoal')}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.menuItem}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons 
+                    name="schedule" 
+                    size={24} 
+                    color={colors.text.primary} 
+                    style={styles.menuIcon} 
+                  />
+                  <Text style={styles.menuItemText}>Reminder At Goal Time</Text>
+                </View>
+                <Switch
+                  value={userData.notificationPreferences.atGoal}
+                  onValueChange={() => toggleNotificationPreference('atGoal')}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.menuItem}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons 
+                    name="warning" 
+                    size={24} 
+                    color={colors.text.primary} 
+                    style={styles.menuIcon} 
+                  />
+                  <Text style={styles.menuItemText}>Reminder After Missing Goal</Text>
+                </View>
+                <Switch
+                  value={userData.notificationPreferences.afterGoal}
+                  onValueChange={() => toggleNotificationPreference('afterGoal')}
+                  color={colors.primary}
+                />
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Section Header */}
+        <Text style={styles.sectionHeader}>ACCOUNT</Text>
+        
+        {/* Account Section */}
+        <View style={styles.section}>
+          {__DEV__ && showDevMenu && (
+            <>
+              <List.Subheader style={styles.sectionHeader}>Debug Options</List.Subheader>
+              <Surface style={styles.section}>
+                <List.Item
+                  title="Test Notifications"
+                  description="Send test notifications for current goal time"
+                  left={props => <List.Icon {...props} icon="bell-ring" />}
+                  onPress={async () => {
+                    try {
+                      await scheduleAllBedMakingReminders(userData.dailyGoal || 'early', true);
+                      Alert.alert(
+                        'Test Notifications',
+                        'Test notifications have been scheduled for your current goal time.',
+                        [{ text: 'OK' }]
+                      );
+                    } catch (error) {
+                      console.error('Error testing notifications:', error);
+                      Alert.alert(
+                        'Error',
+                        'Failed to schedule test notifications. Check console for details.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }}
+                />
+              </Surface>
+            </>
+          )}
+          
+          <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="logout" size={24} color={colors.error} style={styles.menuIcon} />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>Sign Out</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+          </TouchableOpacity>
+          
+          {showDevMenu && (
+            <>
+              <TouchableOpacity style={styles.menuItem} onPress={handleResetStreak}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons name="refresh" size={24} color={colors.text.primary} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Reset Streak</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
               </TouchableOpacity>
-            )}
-          </View>
-          
-          {/* App Info */}
-          <View style={styles.appInfoContainer}>
-            <Text style={styles.appInfoText}>BedMade v1.0.0</Text>
-            <Text style={styles.appInfoText}>© 2025 BedMade Inc.</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-}
+              
+              <TouchableOpacity style={styles.menuItem} onPress={handleCheckStreakValues}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons name="analytics" size={24} color={colors.text.primary} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Check Streak Values</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.menuItem} onPress={handleClearDailyRecords}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons name="delete" size={24} color={colors.text.primary} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Clear Daily Records</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+              
+              {__DEV__ && (
+                <TouchableOpacity style={styles.menuItem} onPress={debugGoalValues}>
+                  <View style={styles.menuItemLeft}>
+                    <MaterialIcons name="bug-report" size={24} color={colors.text.primary} style={styles.menuIcon} />
+                    <Text style={styles.menuItemText}>Debug Goal Values</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
+        
+        {/* App Info */}
+        <View style={styles.appInfoContainer}>
+          <Text style={styles.appInfoText}>BedMade v1.0.0</Text>
+          <Text style={styles.appInfoText}>© 2025 BedMade Inc.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1023,10 +1143,4 @@ const styles = StyleSheet.create({
   },
 });
 
-// Wrap the class component with a functional component to use the navigation hook
-const ProfileScreenWithNavigation = () => {
-  const navigation = useNavigation();
-  return <ProfileScreen navigation={navigation} />;
-};
-
-export default ProfileScreenWithNavigation; 
+export default ProfileScreen; 
