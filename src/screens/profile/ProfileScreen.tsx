@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../api/supabase';
-import { resetStreakCount, clearDailyRecords, getUserProfile, getStreakValues } from '../../api/database';
+import { resetStreakCount, clearDailyRecords, getUserProfile, getStreakValues, updateStreakValues } from '../../api/database';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +13,7 @@ import { Switch } from 'react-native-paper';
 import { scheduleAllBedMakingReminders, cancelAllNotifications, getNotificationPreferences, saveNotificationPreferences } from '../../utils/notificationScheduler';
 import { List, Surface } from 'react-native-paper';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Constants from 'expo-constants';
 
 // Define daily goal time options
 const DAILY_GOAL_OPTIONS = [
@@ -102,6 +103,12 @@ const ProfileScreen = () => {
           // Load locally stored profile picture
           const localProfilePicture = await AsyncStorage.getItem('localProfilePicture');
           
+          // Load notification preferences from AsyncStorage as fallback
+          const localNotificationPrefs = await AsyncStorage.getItem('notificationPreferences');
+          const notificationPrefs = localNotificationPrefs 
+            ? JSON.parse(localNotificationPrefs) 
+            : { beforeGoal: true, atGoal: true, afterGoal: true };
+          
           setUserData(prevData => ({
             ...prevData,
             email: user.email || '',
@@ -111,6 +118,12 @@ const ProfileScreen = () => {
             currentStreak: profile.current_streak || 0,
             bestStreak: profile.longest_streak || 0,
             lastVerificationDate: profile.last_made_date || null,
+            notificationsEnabled: profile.notifications_enabled || false,
+            notificationPreferences: {
+              beforeGoal: profile.notification_before_goal !== undefined ? profile.notification_before_goal : notificationPrefs.beforeGoal,
+              atGoal: profile.notification_at_goal !== undefined ? profile.notification_at_goal : notificationPrefs.atGoal,
+              afterGoal: profile.notification_after_goal !== undefined ? profile.notification_after_goal : notificationPrefs.afterGoal
+            }
           }));
         }
       }
@@ -193,54 +206,65 @@ const ProfileScreen = () => {
     }
   };
 
-  // Upload profile picture to Supabase storage
+  // Upload profile picture to Supabase Storage
   const uploadProfilePicture = async (uri: string) => {
     try {
       setUploadingImage(true);
+      console.log('Starting profile picture upload process for URI:', uri);
       
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.error('No authenticated user found');
         Alert.alert('Error', 'You must be logged in to upload a profile picture.');
         return;
       }
       
-      // Convert image to blob
+      console.log('User authenticated, proceeding with upload');
+      
+      // Create a unique file name for the profile picture
+      const fileExt = uri.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `profile-pictures/${fileName}`;
+      
+      // Convert the image URI to a blob
       const response = await fetch(uri);
       const blob = await response.blob();
       
-      // Upload to Supabase Storage
-      const fileName = `profile-${user.id}-${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage
-        .from('profile-pictures')
-        .upload(fileName, blob);
-      
-      if (error) {
-        console.error('Error uploading image:', error);
-        Alert.alert('Error', 'Failed to upload image. Please try again.');
+      // Upload the image to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
+          upsert: true
+        });
+        
+      if (uploadError) {
+        console.error('Error uploading to Supabase Storage:', uploadError);
+        Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
         return;
       }
       
-      // Get the public URL
+      // Get the public URL of the uploaded image
       const { data: { publicUrl } } = supabase.storage
-        .from('profile-pictures')
-        .getPublicUrl(fileName);
+        .from('avatars')
+        .getPublicUrl(filePath);
       
-      // Update user profile with the new image URL
+      // Save the public URL to AsyncStorage as backup
+      await AsyncStorage.setItem('localProfilePicture', publicUrl);
+      
+      // Update user profile with the public URL
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ profile_picture: publicUrl })
         .eq('id', user.id);
       
       if (updateError) {
-        console.error('Error updating profile:', updateError);
+        console.error('Error updating profile in database:', updateError);
         Alert.alert('Error', 'Failed to update profile. Please try again.');
         return;
       }
-      
-      // Save to AsyncStorage for local access
-      await AsyncStorage.setItem('localProfilePicture', publicUrl);
       
       // Update local state
       setUserData(prevUserData => ({
@@ -248,6 +272,7 @@ const ProfileScreen = () => {
         profilePicture: publicUrl
       }));
       
+      console.log('Profile picture update completed successfully');
       Alert.alert('Success', 'Profile picture updated successfully!');
     } catch (error) {
       console.error('Error in uploadProfilePicture:', error);
@@ -415,6 +440,45 @@ const ProfileScreen = () => {
     );
   };
 
+  // Restore streak values for recovery
+  const handleRestoreStreak = async () => {
+    Alert.prompt(
+      'Restore Streak Values',
+      'Enter your previous streak values (comma-separated):\nCurrent Streak,Longest Streak',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          onPress: async (text) => {
+            if (!text) return;
+            
+            try {
+              const [currentStreak, longestStreak] = text.split(',').map(val => parseInt(val.trim(), 10));
+              
+              if (isNaN(currentStreak) || isNaN(longestStreak)) {
+                Alert.alert('Error', 'Please enter valid numbers');
+                return;
+              }
+              
+              const result = await updateStreakValues(currentStreak, longestStreak);
+              if (result.success) {
+                Alert.alert('Success', `Streak values restored to ${currentStreak} (current) and ${longestStreak} (longest)`);
+                loadUserData(); // Reload user data to update the UI
+              } else {
+                Alert.alert('Error', result.error || 'Failed to restore streak values');
+              }
+            } catch (error) {
+              console.error('Error restoring streak values:', error);
+              Alert.alert('Error', 'Failed to restore streak values');
+            }
+          }
+        }
+      ],
+      'plain-text',
+      '16,16'
+    );
+  };
+
   // Debug function to check goal values
   const debugGoalValues = async () => {
     try {
@@ -516,7 +580,7 @@ const ProfileScreen = () => {
         await cancelAllNotifications();
       }
 
-      // Save setting to AsyncStorage
+      // Save setting to AsyncStorage as backup
       await AsyncStorage.setItem('notificationsEnabled', value.toString());
       
       // Update user profile in database
@@ -545,7 +609,7 @@ const ProfileScreen = () => {
         [preference]: !userData.notificationPreferences[preference]
       };
 
-      // Save preferences
+      // Save preferences to AsyncStorage as backup
       await saveNotificationPreferences(newPreferences);
 
       // Update state
@@ -553,6 +617,25 @@ const ProfileScreen = () => {
         ...prevUserData,
         notificationPreferences: newPreferences
       }));
+
+      // Update user profile in database
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Map the preference to the database column name
+        const dbColumnMap: Record<string, string> = {
+          beforeGoal: 'notification_before_goal',
+          atGoal: 'notification_at_goal',
+          afterGoal: 'notification_after_goal'
+        };
+        
+        const dbColumn = dbColumnMap[preference];
+        if (dbColumn) {
+          await supabase
+            .from('user_profiles')
+            .update({ [dbColumn]: newPreferences[preference] })
+            .eq('id', user.id);
+        }
+      }
 
       // Reschedule notifications if they are enabled
       if (userData.notificationsEnabled) {
@@ -851,6 +934,14 @@ const ProfileScreen = () => {
                 <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
               </TouchableOpacity>
               
+              <TouchableOpacity style={styles.menuItem} onPress={handleRestoreStreak}>
+                <View style={styles.menuItemLeft}>
+                  <MaterialIcons name="restore" size={24} color={colors.text.primary} style={styles.menuIcon} />
+                  <Text style={styles.menuItemText}>Restore Streak Values</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+              
               {__DEV__ && (
                 <TouchableOpacity style={styles.menuItem} onPress={debugGoalValues}>
                   <View style={styles.menuItemLeft}>
@@ -866,7 +957,7 @@ const ProfileScreen = () => {
         
         {/* App Info */}
         <View style={styles.appInfoContainer}>
-          <Text style={styles.appInfoText}>BedMade v1.0.0</Text>
+          <Text style={styles.appInfoText}>BedMade v{Constants.expoConfig?.version || '1.0.1'}</Text>
           <Text style={styles.appInfoText}>© 2025 BedMade Inc.</Text>
         </View>
       </ScrollView>

@@ -4,6 +4,7 @@
     "strict": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "typeRoots": ["./src/types"]
   }
 } 

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Animated } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Alert } from 'react-native';
 import { Text, Button, Surface, Badge, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -12,6 +12,7 @@ import { getTodayLocalDateString } from '../../utils/dateUtils';
 import { getUserProfile } from '../../api/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DevTesting from '../../components/DevTesting';
+import * as FileSystem from 'expo-file-system';
 
 // Define the daily goal options
 const DAILY_GOAL_INFO = {
@@ -83,6 +84,12 @@ const HomeScreen = () => {
   // Add state for avatar URL
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [showDevMenu, setShowDevMenu] = React.useState(false);
+  
+  // Add tap counter state and timeout ref for avatar tap cheat code
+  const [avatarTapCount, setAvatarTapCount] = React.useState(0);
+  const avatarTapTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [showTapIndicator, setShowTapIndicator] = React.useState(false);
+  const tapIndicatorTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Add animation values with proper staggered timing
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -205,14 +212,19 @@ const HomeScreen = () => {
     React.useCallback(() => {
       console.log('HomeScreen focused - reloading user data');
       console.log('Current dailyGoal before focus reload:', dailyGoal);
+      
+      // Increment refreshKey to trigger a full reload
+      setRefreshKey(prevKey => prevKey + 1);
+      
       // Always reload data when screen comes into focus
       hasLoadedGoalRef.current = false; // Reset the ref to force goal reload
       loadUserData();
+      
       return () => {
         // Cleanup function
         console.log('HomeScreen lost focus, dailyGoal value:', dailyGoal);
       }; 
-    }, [refreshKey]) // Remove dailyGoal from dependencies to prevent circular updates
+    }, []) // Empty dependency array to run on every focus
   );
 
   // Load user data on component mount
@@ -325,6 +337,22 @@ const HomeScreen = () => {
       // Get the profile data (needed for both goal setting and streak calculation)
       const profileResult = await getUserProfile();
       const profile = profileResult.profile;
+      
+      // Load avatar URL from profile
+      if (profile?.profile_picture) {
+        console.log('Setting avatar URL from profile:', profile.profile_picture);
+        setAvatarUrl(profile.profile_picture);
+      } else {
+        // Try to load from AsyncStorage as fallback
+        const localProfilePicture = await AsyncStorage.getItem('localProfilePicture');
+        if (localProfilePicture) {
+          console.log('Setting avatar URL from AsyncStorage:', localProfilePicture);
+          setAvatarUrl(localProfilePicture);
+        } else {
+          console.log('No avatar URL found in profile or AsyncStorage');
+          setAvatarUrl(null);
+        }
+      }
       
       // STEP 1: ALWAYS LOAD THE DAILY GOAL FIRST
       // This is important to prevent timing issues where isWithinGoal checks are made with null goal
@@ -512,136 +540,97 @@ const HomeScreen = () => {
         console.error('Error fetching records:', recordsError);
       }
 
-      // Calculate streaks with consecutive date check
+      // Define variables that were previously calculated
       let streakCount = 0;
       let currentStreakCount = 0;
       let bestStreakCount = 0;
+      let breakStreak = false;
 
+      // Calculate streaks from daily records
       if (recordsData && recordsData.length > 0) {
-        // Create a map of dates to verification status
-        const verificationMap = new Map();
-        recordsData.forEach(record => {
-          verificationMap.set(record.date, record.made);
-        });
+        // Sort records by date in descending order (most recent first)
+        const sortedRecords = [...recordsData].sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
 
-        // Convert to sorted array of entries
-        const sortedDates = Array.from(verificationMap.entries())
-          .sort((a, b) => a[0].localeCompare(b[0]));
-
-        console.log('Sorted verification dates:', sortedDates);
-
-        // Check if the most recent verification is more than 1 day old
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Calculate current streak
+        let currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
         
-        // Find the most recent date where bed was made
-        let mostRecentMadeDate = null;
-        for (let i = sortedDates.length - 1; i >= 0; i--) {
-          const [dateStr, isMade] = sortedDates[i];
-          if (isMade) {
-            mostRecentMadeDate = new Date(dateStr);
-            mostRecentMadeDate.setHours(0, 0, 0, 0);
-            break;
-          }
-        }
-        
-        let breakStreak = false;
-        
-        if (mostRecentMadeDate) {
-          const daysSinceLastEntry = Math.floor((today.getTime() - mostRecentMadeDate.getTime()) / (1000 * 60 * 60 * 24));
-          console.log('Days since last entry:', daysSinceLastEntry);
+        for (const record of sortedRecords) {
+          const recordDate = new Date(record.date);
+          recordDate.setHours(0, 0, 0, 0);
           
-          // If the last entry is more than 1 day old, the streak is broken
-          if (daysSinceLastEntry > 1) {
-            console.log('Streak broken - last entry was more than 1 day ago');
-            breakStreak = true;
-            currentStreakCount = 0;
-            streakCount = 0;
+          // If this is today's record and bed was made
+          if (recordDate.getTime() === currentDate.getTime() && record.made) {
+            currentStreakCount++;
+            currentDate.setDate(currentDate.getDate() - 1);
+            continue;
           }
-        }
-        
-        // Calculate best streak regardless of current streak status
-        // We need to calculate this even if current streak is broken
-        let tempStreakCount = 0;
-        
-        // Calculate best streak from all historical data
-        for (let i = 0; i < sortedDates.length; i++) {
-          const [currentDate, isMade] = sortedDates[i];
           
-          if (isMade) {
-            if (tempStreakCount === 0) {
-              tempStreakCount = 1;
-            } else {
-              // Check if dates are consecutive
-              const prevDate = new Date(sortedDates[i - 1][0]);
-              const currDate = new Date(currentDate);
-              const diffTime = currDate.getTime() - prevDate.getTime();
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              if (diffDays === 1) {
-                tempStreakCount++;
-              } else {
-                tempStreakCount = 1; // Reset to 1 since current day is made
-              }
-            }
+          // If this is yesterday's record and bed was made
+          if (recordDate.getTime() === currentDate.getTime() && record.made) {
+            currentStreakCount++;
+            currentDate.setDate(currentDate.getDate() - 1);
+            continue;
+          }
+          
+          // If we find a gap or a day where bed wasn't made, break the streak
+          break;
+        }
+
+        // Calculate best streak
+        let tempStreak = 0;
+        let lastDate = null;
+        
+        for (const record of sortedRecords.reverse()) {
+          if (record.made) {
+            const recordDate = new Date(record.date);
+            recordDate.setHours(0, 0, 0, 0);
             
-            // Update best streak if temp streak is higher
-            if (tempStreakCount > bestStreakCount) {
-              bestStreakCount = tempStreakCount;
+            if (lastDate === null) {
+              tempStreak = 1;
+              lastDate = recordDate;
+            } else {
+              const diffDays = Math.floor((lastDate.getTime() - recordDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays === 1) {
+                tempStreak++;
+                if (tempStreak > bestStreakCount) {
+                  bestStreakCount = tempStreak;
+                }
+              } else {
+                tempStreak = 1;
+              }
+              lastDate = recordDate;
             }
           } else {
-            tempStreakCount = 0;
+            tempStreak = 0;
+            lastDate = null;
           }
         }
-        
-        // Only calculate current streak if it's not already broken
-        if (!breakStreak) {
-          // Calculate current streak with consecutive date check
-          for (let i = 0; i < sortedDates.length; i++) {
-            const [currentDate, isMade] = sortedDates[i];
-            
-            if (isMade) {
-              if (streakCount === 0) {
-                streakCount = 1;
-              } else {
-                // Check if dates are consecutive
-                const prevDate = new Date(sortedDates[i - 1][0]);
-                const currDate = new Date(currentDate);
-                const diffTime = currDate.getTime() - prevDate.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                if (diffDays === 1) {
-                  streakCount++;
-                } else {
-                  streakCount = 1; // Reset to 1 since current day is made
-                }
-              }
-            } else {
-              streakCount = 0;
-            }
-          }
-
-          // The current streak is the final streak count if it's still active
-          currentStreakCount = streakCount;
-        }
-
-        console.log('Calculated streak values:', {
-          currentStreak: currentStreakCount,
-          bestStreak: bestStreakCount,
-          streakCount
-        });
       }
-      
-      // Load locally stored profile picture
-      const localProfilePicture = await AsyncStorage.getItem('localProfilePicture');
-      setAvatarUrl(localProfilePicture);
       
       if (profile) {
         console.log('Raw profile data:', profile);
+        console.log('Profile streak values:', {
+          current_streak: profile.current_streak,
+          longest_streak: profile.longest_streak,
+          type: typeof profile.longest_streak
+        });
         
-        // Use calculated streak values instead of profile values
-        setCurrentStreak(currentStreakCount);
-        setBestStreak(bestStreakCount);
+        // Prioritize database values over calculated values
+        // Only use calculated values if database values are missing or zero
+        const dbCurrentStreak = profile.current_streak || 0;
+        const dbBestStreak = profile.longest_streak || 0;
+        
+        // Use the database streak values if they exist, otherwise use calculated values
+        setCurrentStreak(dbCurrentStreak > 0 ? dbCurrentStreak : currentStreakCount);
+        setBestStreak(dbBestStreak > 0 ? dbBestStreak : bestStreakCount);
+        
+        console.log('Using streak values:', {
+          currentStreak: dbCurrentStreak > 0 ? dbCurrentStreak : currentStreakCount,
+          bestStreak: dbBestStreak > 0 ? dbBestStreak : bestStreakCount
+        });
         
         // Set total beds made based on the actual records count, not just the profile value
         const totalMade = recordsData?.filter(record => record.made)?.length || 0;
@@ -652,13 +641,14 @@ const HomeScreen = () => {
         const newUserStatus = totalMade === 0 && !verifiedToday;
         setIsNewUser(newUserStatus);
         
-        console.log('Updated state with calculated data:', {
-          currentStreak: currentStreakCount,
-          bestStreak: bestStreakCount,
+        console.log('Updated state with profile data:', {
+          currentStreak: dbCurrentStreak > 0 ? dbCurrentStreak : currentStreakCount,
+          bestStreak: dbBestStreak > 0 ? dbBestStreak : bestStreakCount,
           dailyGoal: finalGoal,
           totalBedsMade: totalMade,
           isNewUser: newUserStatus,
-          hasVerifiedToday: verifiedToday
+          hasVerifiedToday: verifiedToday,
+          calculatedBestStreak: bestStreakCount
         });
       } else {
         console.error('No profile data available');
@@ -674,6 +664,56 @@ const HomeScreen = () => {
       setLoading(false);
     }
   };
+
+  // Function to update current streak to 14
+  const updateCurrentStreakTo14 = async (userId: string) => {
+    try {
+      console.log('Updating current streak - START');
+      
+      // Get the latest streak data from the database
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('current_streak, longest_streak')
+        .eq('id', userId)
+        .single();
+        
+      if (profileError) {
+        console.error('Error fetching profile for streak update:', profileError);
+        return;
+      }
+      
+      // Update the state with the actual streak values
+      if (profile) {
+        console.log('Updating streak state with values from database:', {
+          currentStreak: profile.current_streak,
+          bestStreak: profile.longest_streak
+        });
+        
+        setCurrentStreak(profile.current_streak || 0);
+        setBestStreak(profile.longest_streak || 0);
+      }
+    } catch (error) {
+      console.error('Error in updateCurrentStreak:', error);
+    }
+  };
+
+  // Add a useEffect to ensure the streak gets updated when the component mounts
+  // and when returning from the verification screen
+  React.useEffect(() => {
+    const updateStreak = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          console.log('Component mounted - updating streak from database');
+          await updateCurrentStreakTo14(user.id);
+        }
+      } catch (error) {
+        console.error('Error updating streak in useEffect:', error);
+      }
+    };
+    
+    updateStreak();
+  }, [refreshKey]); // Add refreshKey to dependencies to update when returning from verification
 
   // Handle verify bed button press
   const handleVerifyBed = () => {
@@ -855,9 +895,83 @@ const HomeScreen = () => {
     }
   };
 
+  // Handle avatar tap for cheat code
+  const handleAvatarTap = async () => {
+    // Clear any existing timeout
+    if (avatarTapTimeoutRef.current) {
+      clearTimeout(avatarTapTimeoutRef.current);
+    }
+    
+    // Increment tap count
+    const newTapCount = avatarTapCount + 1;
+    setAvatarTapCount(newTapCount);
+    
+    // Show tap indicator
+    setShowTapIndicator(true);
+    
+    // Clear any existing tap indicator timeout
+    if (tapIndicatorTimeoutRef.current) {
+      clearTimeout(tapIndicatorTimeoutRef.current);
+    }
+    
+    // Hide tap indicator after 1 second
+    tapIndicatorTimeoutRef.current = setTimeout(() => {
+      setShowTapIndicator(false);
+    }, 1000);
+    
+    // Set a timeout to reset the tap count after 3 seconds
+    avatarTapTimeoutRef.current = setTimeout(() => {
+      setAvatarTapCount(0);
+    }, 3000);
+    
+    // If we've reached 5 taps, toggle the debug menu
+    if (newTapCount >= 5) {
+      const newDebugMenuState = !showDevMenu;
+      setShowDevMenu(newDebugMenuState);
+      setAvatarTapCount(0); // Reset tap count
+      
+      try {
+        // Save debug menu state to AsyncStorage
+        await AsyncStorage.setItem('debugMenuEnabled', newDebugMenuState ? 'true' : 'false');
+        
+        // Show feedback to the user
+        if (__DEV__) {
+          console.log('Debug menu toggled:', newDebugMenuState);
+          Alert.alert(
+            "Debug Menu",
+            newDebugMenuState 
+              ? "Debug mode activated! Debug elements are now visible." 
+              : "Debug mode deactivated. Debug elements are now hidden.",
+            [{ text: "OK" }]
+          );
+        }
+      } catch (error) {
+        console.error('Error saving debug menu state:', error);
+      }
+    }
+  };
+
+  // Load debug menu state on mount
+  React.useEffect(() => {
+    const loadDebugMenuState = async () => {
+      try {
+        const savedState = await AsyncStorage.getItem('debugMenuEnabled');
+        if (savedState !== null) {
+          setShowDevMenu(savedState === 'true');
+        }
+      } catch (error) {
+        console.error('Error loading debug menu state:', error);
+      }
+    };
+
+    if (__DEV__) {
+      loadDebugMenuState();
+    }
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
-      {__DEV__ && <DevTesting visible={showDevMenu} onClose={() => setShowDevMenu(false)} />}
+      {__DEV__ && showDevMenu && <DevTesting visible={showDevMenu} onClose={() => setShowDevMenu(false)} />}
       
       <ScrollView 
         style={styles.content}
@@ -872,7 +986,15 @@ const HomeScreen = () => {
         >
           <View style={styles.greetingContainer}>
             <View style={styles.greetingTextContainer}>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
+              <View style={styles.greetingRow}>
+                <Text style={styles.greeting}>{getGreeting()}</Text>
+                <MaterialIcons 
+                  name={new Date().getHours() < 18 ? "wb-sunny" : "nightlight-round"} 
+                  size={24} 
+                  color={colors.text.primary} 
+                  style={styles.greetingIcon}
+                />
+              </View>
               <Text style={styles.date}>
                 {new Date().toLocaleDateString('en-US', { 
                   weekday: 'long', 
@@ -885,19 +1007,29 @@ const HomeScreen = () => {
             {avatarUrl && (
               <TouchableOpacity 
                 style={styles.avatarContainer}
-                onPress={() => navigation.navigate('Profile' as any)}
-                onLongPress={handleDevMenuToggle}
-                delayLongPress={500}
+                onPress={handleAvatarTap}
               >
                 <Image 
                   source={{ uri: avatarUrl }}
                   style={styles.avatar}
+                  onError={(e) => {
+                    console.error('Error loading avatar image:', e.nativeEvent.error);
+                    // Set avatar URL to null if there's an error loading the image
+                    setAvatarUrl(null);
+                  }}
                 />
+                {showTapIndicator && (
+                  <View style={styles.tapIndicatorContainer}>
+                    <View style={styles.tapIndicator}>
+                      <Text style={styles.tapIndicatorText}>{avatarTapCount}/5</Text>
+                    </View>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           </View>
           {/* Debug text to show if user is considered new */}
-          {__DEV__ && (
+          {__DEV__ && showDevMenu && (
             <View style={styles.debugContainer}>
               <Text style={styles.debugText}>
                 Debug: isNewUser={isNewUser ? 'true' : 'false'}, totalBedsMade={totalBedsMade}, hasVerifiedBed={hasVerifiedBed ? 'true' : 'false'}
@@ -909,7 +1041,7 @@ const HomeScreen = () => {
                 <TouchableOpacity onPress={debugGoalValues} style={styles.debugButton}>
                   <Text style={styles.debugButtonText}>Debug Goals</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleDevMenuToggle} style={styles.debugButton}>
+                <TouchableOpacity onPress={() => setShowDevMenu(true)} style={styles.debugButton}>
                   <Text style={styles.debugButtonText}>Test Menu</Text>
                 </TouchableOpacity>
               </View>
@@ -928,27 +1060,28 @@ const HomeScreen = () => {
           ]}
         >
           <Text style={styles.sectionTitle}>Today's Status</Text>
-          <Surface style={styles.statusCard}>
-            {hasVerifiedBed ? (
-              <View style={styles.statusContainer}>
-                <View style={styles.statusHeader}>
-                  <View style={styles.iosIconWrapper}>
-                    <LinearGradient
-                      colors={['#32D74B', '#28BD3E']}
-                      style={styles.iosIconBackground}
-                    >
-                      <MaterialIcons name="check" size={28} color="white" />
-                    </LinearGradient>
-                  </View>
-                  <View style={styles.statusTitleContainer}>
-                    <Text style={styles.statusTitle}>Bed Made</Text>
-                    <View style={styles.badgeContainer}>
+          {hasVerifiedBed ? (
+            <>
+              <Surface style={styles.statusCard}>
+                <View style={styles.statusContainer}>
+                  <View style={styles.statusHeader}>
+                    <View style={styles.iosIconWrapper}>
+                      <LinearGradient
+                        colors={['#32D74B', '#28BD3E']}
+                        style={styles.iosIconBackground}
+                      >
+                        <MaterialIcons name="check" size={28} color="white" />
+                      </LinearGradient>
+                    </View>
+                    <View style={styles.statusTitleContainer}>
+                      <Text style={styles.statusTitle}>Bed Made</Text>
                       {verificationTime && (
                         <View style={[
                           styles.verifiedAtContainer,
                           isEarlyCompletion && styles.earlyVerifiedContainer,
                           isWithinGoal && !isEarlyCompletion && styles.onTimeVerifiedContainer,
-                          !isWithinGoal && !isEarlyCompletion && styles.lateVerifiedContainer
+                          !isWithinGoal && !isEarlyCompletion && styles.lateVerifiedContainer,
+                          { width: 95 } // Increased width to better accommodate all time formats
                         ]}>
                           <MaterialIcons 
                             name="schedule" 
@@ -966,109 +1099,62 @@ const HomeScreen = () => {
                         </View>
                       )}
                     </View>
+                    
+                    {isEarlyCompletion && (
+                      <View style={styles.earlyCompletionBadge}>
+                        <MaterialIcons name="star" size={14} color="#FFFFFF" />
+                        <Text style={styles.earlyCompletionBadgeText}>Superstar!</Text>
+                      </View>
+                    )}
+                    
+                    {isWithinGoal && !isEarlyCompletion && (
+                      <View style={styles.goalAchievedBadge}>
+                        <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
+                        <Text style={styles.goalAchievedBadgeText}>Goal Achieved</Text>
+                      </View>
+                    )}
+                    
+                    {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
+                      <View style={styles.missedGoalBadge}>
+                        <MaterialIcons name="warning" size={14} color="#FF3B30" />
+                        <Text style={styles.missedGoalBadgeText}>Goal Missed</Text>
+                      </View>
+                    )}
                   </View>
                   
-                  {isEarlyCompletion && (
-                    <View style={styles.earlyCompletionBadge}>
-                      <MaterialIcons name="star" size={14} color="#FFFFFF" />
-                      <Text style={styles.earlyCompletionBadgeText}>Superstar!</Text>
-                    </View>
-                  )}
-                  
-                  {isWithinGoal && !isEarlyCompletion && (
-                    <View style={styles.goalAchievedBadge}>
-                      <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
-                      <Text style={styles.goalAchievedBadgeText}>Goal Achieved</Text>
-                    </View>
-                  )}
-                  
-                  {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
-                    <View style={styles.missedGoalBadge}>
-                      <MaterialIcons name="warning" size={14} color="#FF3B30" />
-                      <Text style={styles.missedGoalBadgeText}>Goal Missed</Text>
-                    </View>
-                  )}
+                  <View style={styles.statusContent}>
+                    <Text style={styles.statusMessage}>
+                      {isEarlyCompletion 
+                        ? "Outstanding! You beat your goal time and started your day with a win!"
+                        : isWithinGoal 
+                          ? `Great job hitting your ${DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange || 'morning'} goal!`
+                          : "Better late than never! Your bed is made and that's what matters most."}
+                    </Text>
+                  </View>
                 </View>
-                
-                <View style={styles.statusContent}>
-                  <Text style={styles.statusMessage}>
-                    {isEarlyCompletion 
-                      ? "Outstanding! You beat your goal time and started your day with a win!"
-                      : isWithinGoal 
-                        ? `Great job hitting your ${DAILY_GOAL_INFO[dailyGoal as keyof typeof DAILY_GOAL_INFO]?.timeRange || 'morning'} goal!`
-                        : "Better late than never! Your bed is made and that's what matters most."}
-                  </Text>
-                  
-                  {/* Add debug info in dev mode */}
-                  {__DEV__ && (
-                    <View style={{marginVertical: 8, backgroundColor: '#f0f0f0', padding: 8, borderRadius: 4}}>
-                      <Text style={{fontSize: 12, color: '#666'}}>
-                        Debug: goalType={dailyGoal}, isWithinGoal={isWithinGoal ? 'true' : 'false'}, 
-                        isEarlyCompletion={isEarlyCompletion ? 'true' : 'false'}, 
-                        verificationTime={verificationTime}
+              </Surface>
+
+              {/* Morning Goal Tip Card */}
+              {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
+                <Surface style={[styles.statusCard, { marginTop: 12 }]}>
+                  <View style={styles.morningTipContent}>
+                    <View style={styles.checkboxContainer}>
+                      <MaterialIcons name="wb-sunny" size={28} color="#FF3B30" />
+                    </View>
+                    <View style={styles.tipContentContainer}>
+                      <View style={styles.morningTipBadge}>
+                        <Text style={styles.morningTipBadgeText}>Morning Goal Tip</Text>
+                      </View>
+                      <Text style={styles.morningTipText}>
+                        Try making your bed earlier tomorrow to maintain a consistent routine.
                       </Text>
                     </View>
-                  )}
-                  
-                  {/* Add congratulatory animation or badge for goal achievement */}
-                  {isWithinGoal && !isEarlyCompletion && (
-                    <Surface style={styles.achievementCard}>
-                      <View style={styles.achievementContent}>
-                        <View style={styles.achievementHeader}>
-                          <View style={styles.achievementIconContainer}>
-                            <MaterialIcons name="emoji-events" size={24} color="#FFD700" />
-                          </View>
-                          <View style={styles.achievementTextContainer}>
-                            <Text style={styles.achievementTitle}>Daily Goal Completed!</Text>
-                            <Text style={styles.achievementSubtitle}>
-                              Making your bed during your goal time helps build a consistent routine.
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    </Surface>
-                  )}
-                  
-                  {/* Add special content for early completion */}
-                  {isEarlyCompletion && (
-                    <Surface style={styles.earlyAchievementCard}>
-                      <View style={styles.achievementContent}>
-                        <View style={styles.achievementHeader}>
-                          <View style={styles.earlyAchievementIconContainer}>
-                            <MaterialIcons name="star" size={24} color="#FFFFFF" />
-                          </View>
-                          <View style={styles.achievementTextContainer}>
-                            <Text style={styles.earlyAchievementTitle}>Early Bird Bonus!</Text>
-                            <Text style={styles.earlyAchievementSubtitle}>
-                              You're off to an amazing start today. Keep up the momentum!
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    </Surface>
-                  )}
-                </View>
-                
-                {/* Morning Goal Tip Section - Only show when bed is made but goal is missed */}
-                {dailyGoal && !isWithinGoal && !isEarlyCompletion && (
-                  <Surface style={styles.morningTipCard}>
-                    <View style={styles.morningTipContent}>
-                      <View style={styles.checkboxContainer}>
-                        <MaterialIcons name="lightbulb" size={28} color="#FF3B30" />
-                      </View>
-                      <View style={styles.tipContentContainer}>
-                        <View style={styles.morningTipBadge}>
-                          <Text style={styles.morningTipBadgeText}>Morning Goal Tip</Text>
-                        </View>
-                        <Text style={styles.morningTipText}>
-                          Try making your bed earlier tomorrow to maintain a consistent routine.
-                        </Text>
-                      </View>
-                    </View>
-                  </Surface>
-                )}
-              </View>
-            ) : (
+                  </View>
+                </Surface>
+              )}
+            </>
+          ) : (
+            <Surface style={styles.statusCard}>
               <View style={styles.statusContainer}>
                 <View style={styles.statusHeader}>
                   {!dailyGoal || !isPastGoalTime(dailyGoal) ? (
@@ -1174,8 +1260,8 @@ const HomeScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
-          </Surface>
+            </Surface>
+          )}
         </Animated.View>
 
         {/* Streak Section - Only show for non-new users */}
@@ -1318,12 +1404,19 @@ const styles = StyleSheet.create({
   greetingTextContainer: {
     flex: 1,
   },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   greeting: {
     fontSize: 32,
     fontWeight: '800',
     color: '#111827',
     marginBottom: 5,
     letterSpacing: -0.5,
+  },
+  greetingIcon: {
+    marginLeft: 8,
   },
   date: {
     fontSize: 16,
@@ -1846,12 +1939,14 @@ const styles = StyleSheet.create({
   verifiedAtContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 8,
     backgroundColor: '#F2F2F7',
     borderWidth: 1,
     borderColor: '#E5E5EA',
+    marginTop: 2
   },
   earlyVerifiedContainer: {
     backgroundColor: '#F0EFFF',
@@ -1871,6 +1966,8 @@ const styles = StyleSheet.create({
     color: '#6E6E73',
     marginLeft: 3,
     letterSpacing: -0.2,
+    textAlign: 'center',
+    flex: 1
   },
   earlyVerifiedText: {
     color: '#5856D6',
@@ -1988,6 +2085,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4B5563',
     lineHeight: 19,
+  },
+  tapIndicatorContainer: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 4,
+    zIndex: 10,
+  },
+  tapIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FF9500',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tapIndicatorText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 

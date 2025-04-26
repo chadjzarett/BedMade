@@ -102,7 +102,7 @@ const AppNavigator = () => {
           );
         },
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarInactiveTintColor: 'gray',
         tabBarStyle: {
           height: Platform.OS === 'ios' ? 85 : 60,
           backgroundColor: colors.surface,

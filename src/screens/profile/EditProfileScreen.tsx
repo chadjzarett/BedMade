@@ -99,56 +99,49 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
   const saveProfilePicture = async (uri: string) => {
     try {
       setUploadingImage(true);
+      console.log('Starting profile picture upload process for URI:', uri);
       
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.error('No authenticated user found');
         Alert.alert('Error', 'You must be logged in to upload a profile picture.');
         return;
       }
       
-      // Convert image to blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      console.log('User authenticated, proceeding with local storage');
       
-      // Upload to Supabase Storage
-      const fileName = `profile-${user.id}-${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage
-        .from('profile-pictures')
-        .upload(fileName, blob);
-      
-      if (error) {
-        console.error('Error uploading image:', error);
-        Alert.alert('Error', 'Failed to upload image. Please try again.');
-        return;
+      // Save the local URI to AsyncStorage
+      try {
+        await AsyncStorage.setItem('localProfilePicture', uri);
+        console.log('Successfully saved profile picture URI to AsyncStorage:', uri);
+        
+        // Update user profile with the local URI
+        console.log('Updating user profile with local URI...');
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({ profile_picture: uri })
+          .eq('id', user.id);
+        
+        if (updateError) {
+          console.error('Error updating profile in database:', updateError);
+          Alert.alert('Error', 'Failed to update profile. Please try again.');
+          return;
+        }
+        
+        console.log('Successfully updated profile in database');
+        
+        // Update the UI
+        setUserData(prev => ({ ...prev, profilePicture: uri }));
+        setFormData(prev => ({ ...prev, profilePicture: uri }));
+        
+        console.log('Profile picture update completed successfully');
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } catch (storageError) {
+        console.error('Error saving to AsyncStorage:', storageError);
+        Alert.alert('Error', 'Failed to save profile picture. Please try again.');
       }
-      
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profile-pictures')
-        .getPublicUrl(fileName);
-      
-      // Update user profile with the new image URL
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ profile_picture: publicUrl })
-        .eq('id', user.id);
-      
-      if (updateError) {
-        console.error('Error updating profile:', updateError);
-        Alert.alert('Error', 'Failed to update profile. Please try again.');
-        return;
-      }
-      
-      // Store the public URL locally
-      await AsyncStorage.setItem('localProfilePicture', publicUrl);
-      
-      // Update the UI
-      setUserData(prev => ({ ...prev, profilePicture: publicUrl }));
-      setFormData(prev => ({ ...prev, profilePicture: publicUrl }));
-      
-      Alert.alert('Success', 'Profile picture updated successfully!');
     } catch (error) {
       console.error('Error saving profile picture:', error);
       Alert.alert('Error', 'Failed to save profile picture');

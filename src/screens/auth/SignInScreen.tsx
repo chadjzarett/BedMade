@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { TextInput, Button } from 'react-native-paper';
+import { TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { colors } from '../../constants/colors';
 import { supabase, clearAuthData } from '../../api/supabase';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type AuthStackParamList = {
   Welcome: undefined;
   SignIn: undefined;
   SignUp: undefined;
   Onboarding: undefined;
+  ForgotPassword: undefined;
 };
 
 type SignInScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'SignIn'>;
@@ -73,9 +75,7 @@ const SignInScreen = () => {
   };
 
   const handleForgotPassword = () => {
-    // Navigate to forgot password screen or show modal
-    // For now, we'll just log to console
-    console.log('Forgot password');
+    navigation.navigate('ForgotPassword');
   };
 
   const handleSignUp = () => {
@@ -99,9 +99,14 @@ const SignInScreen = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 50 : 0}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <MaterialIcons name="bed" size={40} color="#FFFFFF" />
+          </View>
+        </View>
+
         <View style={styles.header}>
           <Text style={styles.title}>Sign In</Text>
           <Text style={styles.subtitle}>Welcome back to BedMade</Text>
@@ -114,34 +119,46 @@ const SignInScreen = () => {
         )}
 
         <View style={styles.form}>
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+            />
+          </View>
 
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            style={styles.input}
-            secureTextEntry={secureTextEntry}
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-            right={
-              <TextInput.Icon
-                icon={secureTextEntry ? 'eye-off' : 'eye'}
-                onPress={() => setSecureTextEntry(!secureTextEntry)}
-              />
-            }
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              secureTextEntry={secureTextEntry}
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+              right={
+                <TextInput.Icon
+                  icon={() => (
+                    <MaterialIcons 
+                      name={secureTextEntry ? "visibility-off" : "visibility"} 
+                      size={24} 
+                      color="#666666"
+                    />
+                  )}
+                  onPress={() => setSecureTextEntry(!secureTextEntry)}
+                />
+              }
+            />
+          </View>
 
           <TouchableOpacity
             style={styles.forgotPasswordContainer}
@@ -150,15 +167,13 @@ const SignInScreen = () => {
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
-          <Button
-            mode="contained"
+          <TouchableOpacity 
+            style={styles.signInButton}
             onPress={handleSignIn}
-            style={styles.button}
-            loading={loading}
             disabled={loading}
           >
-            Sign In
-          </Button>
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
 
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>Don't have an account? </Text>
@@ -182,45 +197,87 @@ const SignInScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 100,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#4285F4',
+    borderRadius: 20,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
-    marginBottom: 30,
+    alignItems: 'center',
+    marginBottom: 32,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: colors.text.primary,
+    color: '#000000',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
+    fontSize: 17,
+    color: '#666666',
   },
   form: {
     width: '100%',
   },
-  input: {
+  inputContainer: {
     marginBottom: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  button: {
-    marginTop: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
+  input: {
+    backgroundColor: 'transparent',
+    height: 56,
+    fontSize: 17,
+    paddingHorizontal: 16,
   },
   forgotPasswordContainer: {
     alignSelf: 'flex-end',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   forgotPasswordText: {
-    color: colors.primary,
-    fontSize: 14,
+    color: '#4285F4',
+    fontSize: 15,
+  },
+  signInButton: {
+    backgroundColor: '#4285F4',
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  signInButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  signUpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  signUpText: {
+    color: '#666666',
+    fontSize: 15,
+  },
+  signUpLink: {
+    color: '#4285F4',
+    fontSize: 15,
   },
   errorContainer: {
     backgroundColor: '#ffebee',
@@ -232,27 +289,13 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 14,
   },
-  signUpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  signUpText: {
-    color: colors.text.secondary,
-    fontSize: 14,
-  },
-  signUpLink: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   troubleshootContainer: {
     alignItems: 'center',
     marginTop: 24,
     padding: 8,
   },
   troubleshootText: {
-    color: colors.text.secondary,
+    color: '#666666',
     fontSize: 12,
     textDecorationLine: 'underline',
   },

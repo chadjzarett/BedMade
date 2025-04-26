@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from './supabase';
 import { API, STORAGE_KEYS } from '../constants/config';
+import { OPENAI_API_KEY } from '@env';
 
 // Constants
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -134,7 +135,7 @@ export const analyzeBedImage = async (imageUri: string): Promise<{
  */
 export const isOpenAIApiKeySet = async (): Promise<boolean> => {
   const apiKey = await getOpenAIApiKey();
-  return !!apiKey && apiKey !== 'sk-your-actual-openai-api-key';
+  return !!apiKey && apiKey !== 'YOUR_OPENAI_API_KEY';
 };
 
 /**
@@ -149,7 +150,7 @@ export const getOpenAIApiKey = async (): Promise<string | null> => {
     }
     
     // Fall back to config if not in secure storage
-    return API.OPENAI_API_KEY !== 'sk-your-actual-openai-api-key' ? API.OPENAI_API_KEY : null;
+    return OPENAI_API_KEY || API.OPENAI_API_KEY;
   } catch (error) {
     console.error('Error getting OpenAI API key:', error);
     return null;

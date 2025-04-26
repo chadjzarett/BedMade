@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking, Alert } from 'react-native';
-import { TextInput, Button, Checkbox } from 'react-native-paper';
+import { TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../api/supabase';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type AuthStackParamList = {
   Welcome: undefined;
@@ -101,9 +102,14 @@ const SignUpScreen = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 50 : 0}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <MaterialIcons name="bed" size={40} color="#FFFFFF" />
+          </View>
+        </View>
+
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Join BedMade and start your journey</Text>
@@ -116,72 +122,95 @@ const SignUpScreen = () => {
         )}
 
         <View style={styles.form}>
-          <TextInput
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            style={styles.input}
-            autoCapitalize="none"
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Username"
+              value={username}
+              onChangeText={setUsername}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              autoCapitalize="none"
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+            />
+          </View>
 
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+            />
+          </View>
 
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            style={styles.input}
-            secureTextEntry={secureTextEntry}
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-            right={
-              <TextInput.Icon
-                icon={secureTextEntry ? 'eye-off' : 'eye'}
-                onPress={() => setSecureTextEntry(!secureTextEntry)}
-              />
-            }
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              secureTextEntry={secureTextEntry}
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+              right={
+                <TextInput.Icon
+                  icon={() => (
+                    <MaterialIcons 
+                      name={secureTextEntry ? "visibility-off" : "visibility"} 
+                      size={24} 
+                      color="#666666"
+                    />
+                  )}
+                  onPress={() => setSecureTextEntry(!secureTextEntry)}
+                />
+              }
+            />
+          </View>
 
-          <TextInput
-            label="Confirm Password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            style={styles.input}
-            secureTextEntry={confirmSecureTextEntry}
-            mode="outlined"
-            outlineColor={colors.border}
-            activeOutlineColor={colors.primary}
-            right={
-              <TextInput.Icon
-                icon={confirmSecureTextEntry ? 'eye-off' : 'eye'}
-                onPress={() => setConfirmSecureTextEntry(!confirmSecureTextEntry)}
-              />
-            }
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Confirm Password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              style={styles.input}
+              placeholderTextColor="#666666"
+              secureTextEntry={confirmSecureTextEntry}
+              mode="flat"
+              underlineStyle={{ display: 'none' }}
+              theme={{ colors: { primary: 'transparent' } }}
+              right={
+                <TextInput.Icon
+                  icon={() => (
+                    <MaterialIcons 
+                      name={confirmSecureTextEntry ? "visibility-off" : "visibility"} 
+                      size={24} 
+                      color="#666666"
+                    />
+                  )}
+                  onPress={() => setConfirmSecureTextEntry(!confirmSecureTextEntry)}
+                />
+              }
+            />
+          </View>
 
           <View style={styles.termsContainer}>
             <TouchableOpacity 
-              style={styles.checkboxRow}
+              style={styles.checkboxContainer}
               onPress={() => setTermsAccepted(!termsAccepted)}
-              activeOpacity={0.7}
             >
-              <View style={styles.customCheckbox}>
+              <View style={[styles.checkbox, termsAccepted && styles.checkedBox]}>
                 {termsAccepted && (
-                  <View style={styles.checkboxInner} />
+                  <MaterialIcons name="check" size={16} color="#FFFFFF" />
                 )}
               </View>
               <Text style={styles.termsText}>
@@ -192,15 +221,13 @@ const SignUpScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <Button
-            mode="contained"
+          <TouchableOpacity 
+            style={styles.signUpButton}
             onPress={handleSignUp}
-            style={styles.button}
-            loading={loading}
             disabled={loading}
           >
-            Sign Up
-          </Button>
+            <Text style={styles.signUpButtonText}>Sign Up</Text>
+          </TouchableOpacity>
 
           <View style={styles.signInContainer}>
             <Text style={styles.signInText}>Already have an account? </Text>
@@ -217,70 +244,108 @@ const SignUpScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 100,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#4285F4',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
-    marginTop: 40,
-    marginBottom: 30,
+    alignItems: 'center',
+    marginBottom: 32,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: colors.text.primary,
+    color: '#000000',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
+    fontSize: 17,
+    color: '#666666',
   },
   form: {
     width: '100%',
   },
-  input: {
+  inputContainer: {
     marginBottom: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  input: {
+    backgroundColor: 'transparent',
+    height: 56,
+    fontSize: 17,
+    paddingHorizontal: 16,
   },
   termsContainer: {
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 24,
   },
-  checkboxRow: {
+  checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  customCheckbox: {
+  checkbox: {
     width: 20,
     height: 20,
     borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#4285F4',
+    marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkboxInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
+  checkedBox: {
+    backgroundColor: '#4285F4',
   },
   termsText: {
     flex: 1,
-    fontSize: 14,
-    color: colors.text.secondary,
-    lineHeight: 20,
+    fontSize: 15,
+    color: '#666666',
   },
   termsLink: {
-    color: colors.primary,
+    color: '#4285F4',
+  },
+  signUpButton: {
+    backgroundColor: '#4285F4',
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  signUpButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '600',
   },
-  button: {
-    marginTop: 8,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
+  signInContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  signInText: {
+    color: '#666666',
+    fontSize: 15,
+  },
+  signInLink: {
+    color: '#4285F4',
+    fontSize: 15,
   },
   errorContainer: {
     backgroundColor: '#ffebee',
@@ -291,21 +356,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.error,
     fontSize: 14,
-  },
-  signInContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  signInText: {
-    color: colors.text.secondary,
-    fontSize: 14,
-  },
-  signInLink: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
 

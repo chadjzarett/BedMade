@@ -2,14 +2,15 @@
   "expo": {
     "name": "BedMade",
     "slug": "bedmade-expo-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff",
+      "duration": 2000
     },
     "assetBundlePatterns": [
       "**/*"
@@ -18,15 +19,29 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "BedMade needs access to your camera to take photos of your bed for verification.",
-        "NSPhotoLibraryUsageDescription": "BedMade needs access to your photo library to select photos of your bed for verification."
-      }
+        "NSPhotoLibraryUsageDescription": "BedMade needs access to your photo library to select photos of your bed for verification.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.bedmade.app",
+      "icon": "./assets/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.bedmade.app",
+      "icon": "./assets/icon.png"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -43,7 +58,27 @@
         {
           "photosPermission": "BedMade needs access to your photo library to select photos of your bed for verification."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "iosDisplayInForeground": true
+        }
       ]
-    ]
+    ],
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#ffffff",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "BedMade"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7a4e3aa9-4dfe-488c-9f9c-14b15be64bbf"
+      }
+    }
   }
-} 
+}

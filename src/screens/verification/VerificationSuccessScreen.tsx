@@ -36,7 +36,11 @@ const VerificationSuccessScreen = () => {
   const { isMade, message, confidence } = route.params;
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [streakInfo, setStreakInfo] = React.useState({
+  const [streakInfo, setStreakInfo] = React.useState<{
+    currentStreak: number;
+    bestStreak: number;
+    isEarlyBird: boolean;
+  }>({
     currentStreak: 0,
     bestStreak: 0,
     isEarlyBird: false

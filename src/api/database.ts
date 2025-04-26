@@ -337,7 +337,7 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
 
     // Calculate the new streak values
     let currentStreak = profileData?.current_streak || 0;
-    let bestStreak = profileData?.longest_streak || 0;
+    let longestStreak = profileData?.longest_streak || 0;
 
     // If the bed is made, update the streak
     if (isMade) {
@@ -393,14 +393,18 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
           }
           
           currentStreak = streak;
+          
+          // Update longest streak if current streak is higher
+          if (currentStreak > longestStreak) {
+            longestStreak = currentStreak;
+          }
         } else {
           // First verification
           currentStreak = 1;
-        }
-        
-        // Update best streak if current streak is higher
-        if (currentStreak > bestStreak) {
-          bestStreak = currentStreak;
+          // Update longest streak for first verification
+          if (currentStreak > longestStreak) {
+            longestStreak = currentStreak;
+          }
         }
       }
     } else {
@@ -408,14 +412,14 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
       currentStreak = 0;
     }
 
-    console.log('After calculation - Current streak:', currentStreak, 'Best streak:', bestStreak);
+    console.log('After calculation - Current streak:', currentStreak, 'Longest streak:', longestStreak);
 
     // Update the user's profile
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({
         current_streak: currentStreak,
-        longest_streak: bestStreak,
+        longest_streak: longestStreak,
         total_days: totalDays,
         last_made_date: isMade ? today : profileData?.last_made_date
       })
@@ -433,7 +437,7 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
         return {
           success: true,
           currentStreak,
-          bestStreak,
+          bestStreak: longestStreak,
           isEarlyBird,
           error: 'Using calculated values (database update failed due to RLS policy)'
         };
@@ -443,7 +447,7 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
       return {
         success: true,
         currentStreak,
-        bestStreak,
+        bestStreak: longestStreak,
         isEarlyBird,
         error: 'Using calculated values (database update failed)'
       };
@@ -452,7 +456,7 @@ export const updateVerificationData = async (isMade: boolean): Promise<{
     return {
       success: true,
       currentStreak,
-      bestStreak,
+      bestStreak: longestStreak,
       isEarlyBird
     };
   } catch (error) {
@@ -667,6 +671,7 @@ export const getUserProfile = async () => {
           } else {
             break;
           }
+
         }
         
         currentStreak = streak;
@@ -699,7 +704,11 @@ export const getUserProfile = async () => {
             longest_streak: longestStreak,
             last_made_date: lastMadeDate,
             daily_goal: 'early',
-            total_days: totalDays
+            total_days: totalDays,
+            notifications_enabled: false,
+            notification_before_goal: true,
+            notification_at_goal: true,
+            notification_after_goal: true
           })
           .select();
           
@@ -716,7 +725,11 @@ export const getUserProfile = async () => {
               longest_streak: longestStreak,
               last_made_date: lastMadeDate,
               daily_goal: 'early',
-              total_days: totalDays
+              total_days: totalDays,
+              notifications_enabled: false,
+              notification_before_goal: true,
+              notification_at_goal: true,
+              notification_after_goal: true
             })
             .select();
             
@@ -783,4 +796,56 @@ export const getUserProfile = async () => {
       message: 'Using minimal default profile due to unexpected error'
     };
   }
-}; 
+};
+
+/**
+ * Updates the streak values directly for recovery purposes
+ */
+export const updateStreakValues = async (
+  currentStreak: number,
+  longestStreak: number
+): Promise<{
+  success: boolean;
+  error?: string;
+}> => {
+  try {
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return {
+        success: false,
+        error: 'User not authenticated'
+      };
+    }
+
+    const userId = user.id;
+
+    // Update the user's profile with the specified streak values
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        current_streak: currentStreak,
+        longest_streak: longestStreak
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Error updating streak values:', updateError);
+      return {
+        success: false,
+        error: 'Failed to update streak values'
+      };
+    }
+
+    return {
+      success: true
+    };
+  } catch (error) {
+    console.error('Error in updateStreakValues:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred'
+    };
+  }
+};

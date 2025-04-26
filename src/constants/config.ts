@@ -1,4 +1,5 @@
 // App configuration constants
+import { OPENAI_API_KEY } from '@env';
 
 export const APP_NAME = 'BedMade';
 export const APP_VERSION = '1.0.0';
@@ -19,9 +20,7 @@ export const TIMING = {
 
 // API endpoints and keys (to be replaced with actual values)
 export const API = {
-  // Replace this with your actual OpenAI API key
-  // For security, consider using environment variables or secure storage
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'sk-your-actual-openai-api-key',
+  OPENAI_API_KEY: OPENAI_API_KEY || 'sk-proj-1234567890abcdef',
   OPENAI_MODEL: 'gpt-4o', // OpenAI model to use
 };
 
