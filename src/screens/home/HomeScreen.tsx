@@ -1218,19 +1218,20 @@ const HomeScreen = () => {
                   )}
                   
                   {currentStreak > 1 && (
-                    <View style={styles.streakInfoContainer}>
-                      <View style={styles.streakInfoIcon}>
-                        <MaterialIcons name="local-fire-department" size={20} color="#FFF" />
+                    <Surface style={styles.activeStreakCard}>
+                      <View style={styles.activeStreakContent}>
+                        <View style={styles.activeStreakIconContainer}>
+                          <MaterialIcons name="local-fire-department" size={32} color="#FFF" />
+                        </View>
+                        <View style={styles.activeStreakTextContainer}>
+                          <Text style={styles.activeStreakTitle}>Active Streak</Text>
+                          <Text style={styles.activeStreakNumber}>{currentStreak} Days</Text>
+                          <Text style={styles.activeStreakDescription}>
+                            Verify your bed today before midnight to maintain your streak!
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.streakInfoContent}>
-                        <Text style={styles.streakInfoTitle}>
-                          {currentStreak} Day Streak Active
-                        </Text>
-                        <Text style={styles.streakInfoDescription}>
-                          Verify your bed today before midnight to maintain your streak!
-                        </Text>
-                      </View>
-                    </View>
+                    </Surface>
                   )}
                   
                   <TouchableOpacity 
@@ -2107,6 +2108,52 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  activeStreakCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  activeStreakContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeStreakIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 18,
+  },
+  activeStreakTextContainer: {
+    flex: 1,
+  },
+  activeStreakTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
+    marginBottom: 2,
+  },
+  activeStreakNumber: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFD700',
+    marginBottom: 2,
+  },
+  activeStreakDescription: {
+    fontSize: 13,
+    color: 'white',
+    lineHeight: 18,
   },
 });
 

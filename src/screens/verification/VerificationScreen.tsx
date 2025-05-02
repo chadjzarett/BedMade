@@ -397,19 +397,17 @@ const styles = StyleSheet.create({
   tipContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E7',
+    backgroundColor: '#E8F0FE',
     padding: 16,
     borderRadius: 16,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FFE4B8',
     width: '100%',
   },
   tipText: {
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: '#B77C12',
+    color: '#2563EB',
     lineHeight: 20,
   },
   loadingContainer: {
